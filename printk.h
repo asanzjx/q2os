@@ -90,5 +90,6 @@ int vsprintf(char * buf,const char *fmt, va_list args);
 */
 
 int color_printk(unsigned int FRcolor,unsigned int BKcolor,const char * fmt,...);
+void frame_buffer_init();
 
 #endif

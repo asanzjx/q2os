@@ -8,9 +8,7 @@
 
 .section .text
 
-.globl _start
-
-_start:
+ENTRY(_start)
 
 	mov	$0x10,	%ax
 	mov	%ax,	%ds
@@ -56,11 +54,7 @@ entry64:
 	movq	%rax,	%es
 	movq	%rax,	%gs
 	movq	%rax,	%ss
-	// movq	$0xffff800000007E00,	%rsp		/* rsp address */ // 在 task 切换时会造成 access_read_liner 异常
 	movq	_stack_start(%rip),	%rsp		/* rsp address */
-
-// =======
-// 模块 setup_IDT 负责初始化中断描述符表 IDT 内的每个中断描述符 ( 共 256 项 ， 每项占 16B )。它将ignore_int 模块的起始地址和其他配置信息，有序地格式化成IA-32e模式的中断门描述符结构信 息，并把结构信息保存到RAX寄存器(结构信息的低8 字节)和RDX寄存器(结构信息的高8 字节)中。 最后借助rp_siat 模块将这256个中断描述符项统一初始化
 
 setup_IDT:							
 	leaq	ignore_int(%rip),	%rdx
@@ -99,14 +93,13 @@ setup_TSS64:
 	addq	%rcx,	%rax
 	addq	$103,	%rax
 	leaq	GDT_Table(%rip),	%rdi
-	// movq	%rax,	64(%rdi)
-	// shrq	$32,	%rdx
-	// movq	%rdx,	72(%rdi)
 	movq	%rax,	80(%rdi)	//tss segment offset
 	shrq	$32,	%rdx
 	movq	%rdx,	88(%rdi)	//tss+1 segment offset
 
-// ===== go to kernel
+//	mov	$0x50,	%ax
+//	ltr	%ax
+
 	movq	go_to_kernel(%rip),	%rax		/* movq address */
 	pushq	$0x08
 	pushq	%rax
@@ -181,8 +174,6 @@ Loop:
 	popq	%rax
 	iretq
 
-
-
 int_msg:
 	.asciz "Unknown interrupt or fault at RIP\n"
 
@@ -197,50 +188,58 @@ ENTRY(_stack_start)
 
 __PML4E:
 
-	.quad	0x102007
+	.quad	0x102003
 	.fill	255,8,0
-	.quad	0x102007
+	.quad	0x102003
 	.fill	255,8,0
 
 .org	0x2000
 
 __PDPTE:
 	
-	// .quad	0x103003
-	.quad	0x103007	// for r3
+	.quad	0x103003	/* 0x103003 */
 	.fill	511,8,0
 
 .org	0x3000
 
 __PDE:
 
-	// .quad	0x000083	
-	// .quad	0x200083
-	// .quad	0x400083
-	// .quad	0x600083
-	// .quad	0x800083
-	// .quad	0xe0000083		/*0x a00000*/
-	// .quad	0xe0200083
-	// .quad	0xe0400083
-	// .quad	0xe0600083		/*0x1000000*/
-	// .quad	0xe0800083
-	// .quad	0xe0a00083
-	// .quad	0xe0c00083
-	// .quad	0xe0e00083
-	.quad	0x000087	
-	.quad	0x200087
-	.quad	0x400087
-	.quad	0x600087
-	.quad	0x800087		/* 0x800083 */
-	.quad	0xe0000087		/*0x a00000*/
-	.quad	0xe0200087
-	.quad	0xe0400087
-	.quad	0xe0600087		/*0x1000000*/
-	.quad	0xe0800087
-	.quad	0xe0a00087
-	.quad	0xe0c00087
-	.quad	0xe0e00087	
-	.fill	499,8,0
+	.quad	0x000083	
+	.quad	0x200083
+	.quad	0x400083
+	.quad	0x600083
+	.quad	0x800083		/* 0x800083 */
+	.quad	0xa00083
+	.quad	0xc00083
+	.quad	0xe00083
+	.quad	0x1000083
+	.quad	0x1200083
+	.quad	0x1400083
+	.quad	0x1600083
+	.quad	0x1800083
+	.quad	0x1a00083
+	.quad	0x1c00083
+	.quad	0x1e00083
+	.quad	0x2000083
+	.quad	0x2200083
+	.quad	0x2400083
+	.quad	0x2600083
+	.quad	0x2800083
+	.quad	0x2a00083
+	.quad	0x2c00083
+	.quad	0x2e00083
+
+
+
+	.quad	0xe0000083		/*0x 3000000*/
+	.quad	0xe0200083
+	.quad	0xe0400083
+	.quad	0xe0600083
+	.quad	0xe0800083
+	.quad	0xe0a00083
+	.quad	0xe0c00083
+	.quad	0xe0e00083
+	.fill	480,8,0
 
 //=======	GDT_Table
 
@@ -284,6 +283,7 @@ IDT_BASE:	.quad	IDT_Table
 TSS64_Table:
 	.fill  13,8,0
 TSS64_END:
+
 
 TSS64_POINTER:
 TSS64_LIMIT:	.word	TSS64_END - TSS64_Table - 1

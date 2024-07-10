@@ -192,43 +192,6 @@ struct tss_struct init_tss[NR_CPUS] = { [0 ... NR_CPUS-1] = INIT_TSS };
 */
 
 
-inline	struct task_struct * get_current()
-{
-	struct task_struct * current = NULL;
-	__asm__ __volatile__ ("andq %%rsp,%0	\n\t":"=r"(current):"0"(~32767UL));
-	return current;
-}
-
-#define current get_current()
-
-#define GET_CURRENT			\
-	"movq	%rsp,	%rbx	\n\t"	\
-	"andq	$-32768,%rbx	\n\t"
-
-/*
-
-*/
-
-
-#define switch_to(prev,next)			\
-do{							\
-	__asm__ __volatile__ (	"pushq	%%rbp	\n\t"	\
-				"pushq	%%rax	\n\t"	\
-				"movq	%%rsp,	%0	\n\t"	\
-				"movq	%2,	%%rsp	\n\t"	\
-				"leaq	1f(%%rip),	%%rax	\n\t"	\
-				"movq	%%rax,	%1	\n\t"	\
-				"pushq	%3		\n\t"	\
-				"jmp	__switch_to	\n\t"	\
-				"1:	\n\t"	\
-				"popq	%%rax	\n\t"	\
-				"popq	%%rbp	\n\t"	\
-				:"=m"(prev->thread->rsp),"=m"(prev->thread->rip)		\
-				:"m"(next->thread->rsp),"m"(next->thread->rip),"D"(prev),"S"(next)	\
-				:"memory"		\
-				);			\
-}while(0)
-
 /*
 
 */
@@ -239,24 +202,5 @@ void task_init();
 #define MAX_SYSTEM_CALL_NR 128
 
 typedef unsigned long (* system_call_t)(struct pt_regs * regs);
-
-unsigned long no_system_call(struct pt_regs * regs)
-{
-	color_printk(RED,BLACK,"no_system_call is calling,NR:%#04x\n",regs->rax);
-	return -1;
-}
-
-unsigned long sys_printf(struct pt_regs * regs)
-{
-	color_printk(BLACK,WHITE,(char *)regs->rdi);
-	return 1;
-}
-
-system_call_t system_call_table[MAX_SYSTEM_CALL_NR] = 
-{
-	[0] = no_system_call,
-	[1] = sys_printf,
-	[2 ... MAX_SYSTEM_CALL_NR-1] = no_system_call
-};
 
 #endif

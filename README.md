@@ -2,13 +2,13 @@
  a study os
 
 
-# 开发环境及工具
+# develop env and tools
 
-- wsl2 ubuntu 22.04 LTS(gcc version 11.4.0)
+- wsl2 ubuntu 22.04 LTS(gcc version 11.4.0) / MacOS
 - bochs 2.8
 
-```
-// 编译配置：
+```bochs 2.8 compile
+// Compile configure：
 ./configure --with-x11 --with-wx --enable-debugger --enable-disasm \
  --enable-all-optimizations --enable-readline --enable-long-phy-address \
  --enable-ltdl-install --enable-idle-hack --enable-plugins --enable-a20-pin \
@@ -31,4 +31,16 @@ cp iodev/hdimage/vbox.cpp iodev/hdimage/vbox.cc
 
 ```
 
+# Feature
+
+implement based on Single CPU
+- Advanced memory manage, based on SLAB
+- APIC, based on Local APIC and I/O APIC
+- keyboard, mouse and disk(block device model) driver based on APIC
+- task, user level function, system call
+
+// todo..
+[] user function ret
+[] support multi cpus, task schedule
+...
 

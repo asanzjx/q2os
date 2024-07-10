@@ -78,6 +78,9 @@
 //7,1,0
 #define	PAGE_KERNEL_Page	(PAGE_PS  | PAGE_R_W | PAGE_Present)
 
+//1,0
+#define PAGE_USER_GDT		(PAGE_U_S | PAGE_R_W | PAGE_Present)
+
 //2,1,0
 #define PAGE_USER_Dir		(PAGE_U_S | PAGE_R_W | PAGE_Present)
 
@@ -186,7 +189,8 @@ struct Global_Memory_Descriptor
 
 //
 #define PG_Slab		(1 << 9)
-
+//	shared=1 or single-use=0 
+#define PG_Shared	(1 << 4)
 struct Page
 {
 	struct Zone *	zone_struct;
@@ -229,6 +233,56 @@ struct Zone
 	unsigned long	total_pages_link;
 };
 
+struct Slab
+{
+	struct List list;
+	struct Page * page;
+
+	unsigned long using_count;
+	unsigned long free_count;
+
+	void * Vaddress;
+
+	unsigned long color_length;
+	unsigned long color_count;
+
+	unsigned long * color_map;
+};
+
+struct Slab_cache
+{
+	unsigned long	size;
+	unsigned long	total_using;
+	unsigned long	total_free;
+	struct Slab *	cache_pool;
+	struct Slab *	cache_dma_pool;
+	void *(* constructor)(void * Vaddress,unsigned long arg);
+	void *(* destructor)(void * Vaddress,unsigned long arg);
+};
+
+/*
+	kmalloc`s struct
+*/
+
+struct Slab_cache kmalloc_cache_size[16] = 
+{
+	{32	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{64	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{128	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{256	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{512	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{1024	,0	,0	,NULL	,NULL	,NULL	,NULL},			//1KB
+	{2048	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{4096	,0	,0	,NULL	,NULL	,NULL	,NULL},			//4KB
+	{8192	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{16384	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{32768	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{65536	,0	,0	,NULL	,NULL	,NULL	,NULL},			//64KB
+	{131072	,0	,0	,NULL	,NULL	,NULL	,NULL},			//128KB
+	{262144	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{524288	,0	,0	,NULL	,NULL	,NULL	,NULL},
+	{1048576,0	,0	,NULL	,NULL	,NULL	,NULL},			//1MB
+};
 
 extern struct Global_Memory_Descriptor memory_management_struct;
 
@@ -239,6 +293,9 @@ unsigned long page_clean(struct Page * page);
 void init_memory();
 
 struct Page * alloc_pages(int zone_select,int number,unsigned long page_flags);
+
+#define SIZEOF_LONG_ALIGN(size) ((size + sizeof(long) - 1) & ~(sizeof(long) - 1) )
+#define SIZEOF_INT_ALIGN(size) ((size + sizeof(int) - 1) & ~(sizeof(int) - 1) )
 
 /*
 
@@ -279,5 +336,23 @@ inline unsigned long * Get_gdt()
 	return tmp;
 }
 
+// ================================
+// slab
+// ================================
+
+unsigned long slab_init();
+void * slab_malloc(struct Slab_cache * slab_cache,unsigned long arg);
+unsigned long slab_free(struct Slab_cache * slab_cache,void * address,unsigned long arg);
+unsigned long slab_destroy(struct Slab_cache * slab_cache);
+
+
+void * kmalloc(unsigned long size,unsigned long flags);
+struct Slab * kmalloc_create(unsigned long size);
+unsigned long kfree(void * address);
+
+void free_pages(struct Page * page,int number);
+void pagetable_init();
+unsigned long get_page_attribute(struct Page * page);
+unsigned long set_page_attribute(struct Page * page,unsigned long flags);
 
 #endif

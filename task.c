@@ -4,6 +4,63 @@
 #include "memory.h"
 #include "linkage.h"
 
+// =======================================
+inline	struct task_struct * get_current()
+{
+	struct task_struct * current = NULL;
+	__asm__ __volatile__ ("andq %%rsp,%0	\n\t":"=r"(current):"0"(~32767UL));
+	return current;
+}
+
+#define current get_current()
+
+#define GET_CURRENT			\
+	"movq	%rsp,	%rbx	\n\t"	\
+	"andq	$-32768,%rbx	\n\t"
+
+/*
+
+*/
+
+
+#define switch_to(prev,next)			\
+do{							\
+	__asm__ __volatile__ (	"pushq	%%rbp	\n\t"	\
+				"pushq	%%rax	\n\t"	\
+				"movq	%%rsp,	%0	\n\t"	\
+				"movq	%2,	%%rsp	\n\t"	\
+				"leaq	1f(%%rip),	%%rax	\n\t"	\
+				"movq	%%rax,	%1	\n\t"	\
+				"pushq	%3		\n\t"	\
+				"jmp	__switch_to	\n\t"	\
+				"1:	\n\t"	\
+				"popq	%%rax	\n\t"	\
+				"popq	%%rbp	\n\t"	\
+				:"=m"(prev->thread->rsp),"=m"(prev->thread->rip)		\
+				:"m"(next->thread->rsp),"m"(next->thread->rip),"D"(prev),"S"(next)	\
+				:"memory"		\
+				);			\
+}while(0)
+unsigned long no_system_call(struct pt_regs * regs)
+{
+	color_printk(RED,BLACK,"no_system_call is calling,NR:%#04x\n",regs->rax);
+	return -1;
+}
+
+unsigned long sys_printf(struct pt_regs * regs)
+{
+	color_printk(BLACK,WHITE,(char *)regs->rdi);
+	return 1;
+}
+
+system_call_t system_call_table[MAX_SYSTEM_CALL_NR] = 
+{
+	[0] = no_system_call,
+	[1] = sys_printf,
+	[2 ... MAX_SYSTEM_CALL_NR-1] = no_system_call
+};
+// =======================================
+
 extern void ret_from_intr();
 extern void ret_system_call(void);
 extern void system_call(void);
@@ -12,8 +69,9 @@ extern void system_call(void);
 void user_level_function()
 {
 	long ret = 0;
-	color_printk(RED,BLACK,"user_level_function task is running\n");
-	char string[]="Hello World!\n";
+	// !!! user level function can't directly use kernel function, case page_faule
+	// color_printk(RED,BLACK,"user_level_function task is running\n");
+	char string[]="\n\tHello World! -from user level function\n";
 
 	__asm__	__volatile__	(	"leaq	sysexit_return_address(%%rip),	%%rdx	\n\t"
 					"movq	%%rsp,	%%rcx		\n\t"
@@ -21,7 +79,8 @@ void user_level_function()
 					"sysexit_return_address:	\n\t"
 					:"=a"(ret):"0"(1),"D"(string):"memory");	
 
-	color_printk(RED,BLACK,"user_level_function task called sysenter,ret:%ld\n",ret);
+	// color_printk(RED,BLACK,"user_level_function task called sysenter,ret:%ld\n",ret);
+	// __asm__ __volatile__("xchgw %bx, %bx");
 
 	while(1);
 }
@@ -36,7 +95,33 @@ unsigned long do_execve(struct pt_regs * regs)
 	regs->es = 0;
 	color_printk(RED,BLACK,"do_execve task is running\n");
 
+	
+
+	unsigned long addr = 0x800000;
+    unsigned long * tmp;
+	unsigned long * virtual = NULL;
+    struct Page *p = NULL;
+	
+	// Allcocate indepent page table, 2MB
+	// limit addr space
+	Global_CR3 = Get_gdt();
+    tmp = Phy_To_Virt((unsigned long *)((unsigned long)Global_CR3 & (~ 0xfffUL)) + ((addr >> PAGE_GDT_SHIFT) & 0x1ff));
+    virtual = kmalloc(PAGE_4K_SIZE,0);
+    set_mpl4t(tmp,mk_mpl4t(Virt_To_Phy(virtual),PAGE_USER_GDT));
+    tmp = Phy_To_Virt((unsigned long *)(*tmp & (~ 0xfffUL)) + ((addr >> PAGE_1G_SHIFT) & 0x1ff));
+    virtual = kmalloc(PAGE_4K_SIZE,0);
+    set_pdpt(tmp,mk_pdpt(Virt_To_Phy(virtual),PAGE_USER_Dir));
+    tmp = Phy_To_Virt((unsigned long *)(*tmp & (~ 0xfffUL)) + ((addr >> PAGE_2M_SHIFT) & 0x1ff));
+    p = alloc_pages(ZONE_NORMAL,1,PG_PTable_Maped);
+    set_pdt(tmp,mk_pdt(p->PHY_address,PAGE_USER_Page));
+    flush_tlb();
+
+    if(!(current->flags & PF_KTHREAD))
+        current->addr_limit = 0xffff800000000000;
+	// color_printk(RED,BLACK,"\t do_execve task step1 is running\n");
+
 	memcpy(user_level_function,(void *)0x800000,1024);
+	// color_printk(RED,BLACK,"\t do_execve task step2 is running\n");
 
 	return 0;
 }
@@ -51,6 +136,8 @@ unsigned long init(unsigned long arg)
 	current->thread->rip = (unsigned long)ret_system_call;
 	current->thread->rsp = (unsigned long)current + STACK_SIZE - sizeof(struct pt_regs);
 	regs = (struct pt_regs *)current->thread->rsp;
+
+	current->flags = 0;
 
 	__asm__	__volatile__	(	"movq	%1,	%%rsp	\n\t"
 					"pushq	%2		\n\t"
@@ -79,11 +166,13 @@ unsigned long do_fork(struct pt_regs * regs, unsigned long clone_flags, unsigned
 	*tsk = *current;
 
 	list_init(&tsk->list);
-	list_add_to_before(&init_task_union.task.list,&tsk->list);	
+	list_add_to_before(&init_task_union.task.list,&tsk->list);
+	tsk->priority = 2;	
 	tsk->pid++;	
 	tsk->state = TASK_UNINTERRUPTIBLE;
 
 	thd = (struct thread_struct *)(tsk + 1);
+	memset(thd,0,sizeof(*thd));
 	tsk->thread = thd;	
 
 	memcpy(regs,(void *)((unsigned long)tsk + STACK_SIZE - sizeof(struct pt_regs)),sizeof(struct pt_regs));
@@ -97,6 +186,8 @@ unsigned long do_fork(struct pt_regs * regs, unsigned long clone_flags, unsigned
 		thd->rip = regs->rip = (unsigned long)ret_system_call;
 
 	tsk->state = TASK_RUNNING;
+	// insert_task_queue(tsk);
+	// list_add_to_before(&tsk->list,&tsk->list);
 
 	return 0;
 }
@@ -173,7 +264,8 @@ inline void __switch_to(struct task_struct *prev,struct task_struct *next)
 
 	init_tss[0].rsp0 = next->thread->rsp0;
 
-	set_tss64(init_tss[0].rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
+	// set_tss64(init_tss[0].rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
+	set_tss64(TSS64_Table,init_tss[0].rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
 
 	__asm__ __volatile__("movq	%%fs,	%0 \n\t":"=a"(prev->thread->fs));
 	__asm__ __volatile__("movq	%%gs,	%0 \n\t":"=a"(prev->thread->gs));
@@ -191,7 +283,7 @@ inline void __switch_to(struct task_struct *prev,struct task_struct *next)
 
 void task_init()
 {
-	struct task_struct *p = NULL;
+	struct task_struct *tmp = NULL;
 
 	init_mm.pgd = (pml4t_t *)Global_CR3;
 
@@ -215,7 +307,8 @@ void task_init()
 	wrmsr(0x176,(unsigned long)system_call);
 
 //	init_thread,init_tss
-	set_tss64(init_thread.rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
+	// set_tss64(init_thread.rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
+	set_tss64(TSS64_Table,init_thread.rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
 
 	init_tss[0].rsp0 = init_thread.rsp0;
 
@@ -225,8 +318,10 @@ void task_init()
 
 	init_task_union.task.state = TASK_RUNNING;
 
-	p = container_of(list_next(&current->list),struct task_struct,list);
+	tmp = container_of(list_next(&current->list),struct task_struct,list);
+	// new
+	// tmp = container_of(list_next(&task_schedule.task_queue.list),struct task_struct,list);
 
-	switch_to(current,p);
+	switch_to(current, tmp);
 }
 
