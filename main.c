@@ -10,7 +10,8 @@
 #include "trap.h"
 #include "memory.h"
 #include "task.h"
-
+#include "interrupt.h"
+#include "SMP.h"
 #if APIC
 #include "APIC.h"
 #include "keyboard.h"
@@ -21,16 +22,69 @@
 #include "8259A.h"
 #endif
 
+struct time
+{
+    int second;    //00
+    int minute;    //02
+    int hour;      //04
+    int day;       //07
+    int month;     //08
+    int year;      //09+32
+};
 
 
+
+//////////////////////////////////////////////////
+//					Constants					//
+//////////////////////////////////////////////////
+#define CMOS_READ(addr) ({ \
+    io_out8(0x70,0x80 | addr); \
+    io_in8(0x71); \
+})
+
+
+
+//////////////////////////////////////////////////
+//					Global vars					//
+//////////////////////////////////////////////////
 /*************
     static var 
 */
+// record screen info
+struct position Pos = {0};
+
+// APs lock
+spinlock_T SMP_lock;
+
+// cpus numbs, apic index id
+int global_i = 0;
+
+irq_desc_T SMP_IPI_desc[10] = {0};
+void (* SMP_interrupt[10])(void);
+
+struct time time;
 
 
 struct Global_Memory_Descriptor memory_management_struct = {{0},0};
 
-
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
+int get_cmos_time(struct time *time)
+{
+    cli();
+    do
+    {   time->year =   CMOS_READ(0x09) + CMOS_READ(0x32) * 0x100;
+        time->month =  CMOS_READ(0x08);
+        time->day =    CMOS_READ(0x07);
+        time->hour =   CMOS_READ(0x04);
+        time->minute = CMOS_READ(0x02);
+        time->second = CMOS_READ(0x00);
+    }while(time->second != CMOS_READ(0x00));
+    io_out8(0x70,0x00);
+    sti();
+	color_printk(RED, YELLOW, "\n===========[+]Get COMS time..............\n");
+}
 /**********
 * global function
 */
@@ -193,6 +247,7 @@ void test_memory()
 
 void Start_Kernel(void)
 {
+	spin_init(&Pos.printk_lock);
     // show_color();
     print_color_hello();
 
@@ -258,7 +313,7 @@ void Start_Kernel(void)
 	disk_init();
 
 	// 4.4 driver test
-// /*
+/*
 	color_printk(PURPLE,BLACK,"[+]disk test:...................................\n");
 	// =============== 4.4.1 disk write test based on block device driver model
 	color_printk(PURPLE,BLACK,"disk write:\n");
@@ -278,7 +333,17 @@ void Start_Kernel(void)
 	for(i;i < 512 ; i++)
 		color_printk(BLACK,WHITE,"%02x",buf[i]);
 	color_printk(PURPLE,BLACK,"\ndisk read end\n");
-// */
+*/
+	// 4.5 SMP implement based on Local APIC
+	color_printk(RED,YELLOW,"\n[+]BSP smp init\n");
+	SMP_init();
+	
+	get_cmos_time(&time);
+	color_printk(BLACK, WHITE, "year:%#010x,month:%#010x,day:%#010x,hour:%#010x,mintue:%#010x,second:%#010x\n",time.year,time.month,time.day,time.hour,time.minute, time.second);
+
+#if Bochs
+	// BochsMagicBreakpoint();
+#endif
 #else
 	init_8259A();
 #endif

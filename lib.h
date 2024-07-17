@@ -1,6 +1,29 @@
 #ifndef __LIB_H__
 #define __LIB_H__
 
+// =============== Compile & Debug
+#if Bochs
+#define BochsMagicBreakpoint()	\
+	__asm__ __volatile__("xchgw %bx, %bx")
+
+#define BochsConsolePrintChar(c) io_out8(0xe9, c)
+// outputs a character to the debug console
+/*
+// #define BochsConsolePrintChar(c) outportb(0xe9, c);
+#define BochsConsolePrintChar(c) io_out8(0xe9, c)
+
+// print strs 
+#define BochsConsolePrintStr(strs)	\
+	int x = 0;	\
+	char c;	\
+	int str_lens = strlen(strs);	\
+	for(x; x < str_lens; x++){	\
+		c = strs[i];	\
+		io_out8(0xe9, c);	\
+	}
+*/
+#endif
+// ===============
 
 #define NULL 0
 
@@ -10,6 +33,8 @@
 	(type *)((unsigned long)p - (unsigned long)&(((type *)0)->member));		\
 })
 
+#define hlt() 		__asm__ __volatile__ ("hlt	\n\t")
+#define pause() 	__asm__ __volatile__ ("pause	\n\t")
 
 #define sti() 		__asm__ __volatile__ ("sti	\n\t":::"memory")
 #define cli()	 	__asm__ __volatile__ ("cli	\n\t":::"memory")

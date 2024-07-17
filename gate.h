@@ -117,6 +117,25 @@ unsigned long ist4,unsigned long ist5,unsigned long ist6,unsigned long ist7)
 	*(unsigned long *)(TSS64_Table+21) = ist7;	
 }
 
-
+// kernel_head.S 中定义的 gdt 表
+// kernel_head.S 中定义的 idt 表
+/**
+ * @brief 在 GDT 中偏移为 n 的地方设置 tss 描述符
+ * 
+ * @param n GDT 中的偏移
+ * @param addr tss 的地址
+ */
+inline void set_tss_descriptor(unsigned int n, void *addr) {
+	unsigned long limit = 103;
+//   *(unsigned long *)(GDT_TABLE + n) =
+	*(unsigned long *)(GDT_Table + n) =
+		(limit & 0xffff) | (((unsigned long)addr & 0xffff) << 16) | 
+		(((unsigned long)addr >> 16 & 0xff) << 32) | ((unsigned long)0x89 << 40) | 
+		((limit >> 16 & 0xf) << 48) | 
+		(((unsigned long)addr >> 24 & 0xff) << 56); /////89 is attribute
+	// *(unsigned long *)(GDT_TABLE + n + 1) =
+	*(unsigned long *)(GDT_Table + n + 1) =
+      ((unsigned long)addr >> 32 & 0xffffffff) | 0;
+}
 #endif
 

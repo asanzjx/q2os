@@ -241,8 +241,9 @@ void init_memory()
 
 	color_printk(ORANGE,BLACK,"1.memory_management_struct.bits_map:%#018lx\tzone_struct->page_using_count:%d\tzone_struct->page_free_count:%d\n",*memory_management_struct.bits_map,memory_management_struct.zones_struct->page_using_count,memory_management_struct.zones_struct->page_free_count);
 
-	for(i = 0;i < 10;i++)
-		*(Phy_To_Virt(Global_CR3)  + i) = 0UL;
+	// commit for AP init test
+	// for(i = 0;i < 10;i++)
+	// 	*(Phy_To_Virt(Global_CR3)  + i) = 0UL;
 	
 	flush_tlb();
 	// 一旦处理器执行完flush_tlb函数，线性地址0处的页表映射便不复存在，此后内核程序只存在于线性地址0xffff800000000000处

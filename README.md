@@ -38,9 +38,11 @@ implement based on Single CPU
 - APIC, based on Local APIC and I/O APIC
 - keyboard, mouse and disk(block device model) driver based on APIC
 - task, user level function, system call
+- multi cores supported, based on SMP
+- implement RTC by I/O CMOS
 
 // todo..
 [] user function ret
-[] support multi cpus, task schedule
+[] task schedule
 ...
 

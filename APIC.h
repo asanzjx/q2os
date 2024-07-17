@@ -259,7 +259,7 @@ void IOAPIC_pagetable_remap();
 /*
 
 */
-
+void Local_APIC_edge_level_ack(unsigned long nr);
 void do_IRQ(struct pt_regs * regs,unsigned long nr);
 
 /*

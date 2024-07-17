@@ -1,8 +1,18 @@
-NEWCFLAGS := -fno-stack-protector -fno-pie -fno-pic -fno-common -std=gnu89 -nostartfiles -Wno-address-of-packed-member
+# Boot: Bios / UEFI
+BOOT = Bios
 
-CFLAGS := -mcmodel=large -fno-builtin -m64 -fno-stack-protector -fno-pie -fno-pic -fno-common -std=gnu89 -nostartfiles -Wno-address-of-packed-member
+# PC / Bochs / Qemu
+MACHINE := Bochs
+
+# APIC / 8259A
+PIC := APIC
+# PIC := PIC
+
+WORKDIR := $(shell pwd)
 
 OLDCFLAGS := -mcmodel=large -fno-builtin -m64
+NEWCFLAGS := -fno-stack-protector -fno-pie -fno-pic -fno-common -std=gnu89 -nostartfiles -Wno-address-of-packed-member
+CFLAGS := -mcmodel=large -fno-builtin -m64 -fno-stack-protector -fno-pie -fno-pic -fno-common -std=gnu89 -nostartfiles -Wno-address-of-packed-member  -D$(PIC) -D$(BOOT) -D$(MACHINE)
 
 ifeq ($(shell arch),x86_64)
 	GCC = gcc
@@ -14,23 +24,28 @@ else
 	AS = x86_64-elf-as
 	LD = x86_64-elf-ld
 	OBJCOPY = x86_64-elf-objcopy
+	OBJDUMP := x86_64-elf-objdump
 endif
-
-PIC := APIC
-# PIC := PIC
 
 all: system
 	$(OBJCOPY) -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
 	rm -rf *.o *.as
-	objdump -d ./system > system.bin.asm
+	$(OBJDUMP) -d ./system > system.bin.asm
+# make -C $(WORKDIR)/deploy
+	cd $(WORKDIR)/deploy && ./deploy_kernel.sh 
+
 
 ifeq ($(PIC),APIC)
-system:	head.o entry.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o main.o
-	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o main.o -T Kernel.lds
+system:	head.o entry.o APU_boot.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o main.o
+	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o main.o -T Kernel.lds
 else
 system:	head.o entry.o printk.o trap.o memory.o PIC.o task.o main.o
 	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o trap.o printk.o memory.o PIC.o task.o main.o -T Kernel.lds
 endif
+
+APU_boot.o: APU_boot.S
+	$(GCC) -E APU_boot.S > APU_boot.as
+	$(AS) --64 -o APU_boot.o APU_boot.as
 
 head.o:	kernel_header.S
 	$(GCC) -E  kernel_header.S > kernel_header.as
@@ -41,7 +56,7 @@ entry.o: entry.S
 	$(AS) --64 -o entry.o entry.as
 
 main.o:	main.c
-	$(GCC) $(CFLAGS) -c main.c -D$(PIC)
+	$(GCC) $(CFLAGS) -c main.c
 
 printk.o: printk.c
 	$(GCC) $(CFLAGS) -c printk.c
@@ -73,6 +88,9 @@ endif
 
 task.o: task.c
 	$(GCC) $(CFLAGS) -c task.c
+
+SMP.o: SMP.c
+	$(GCC) $(CFLAGS) -c SMP.c
 
 loader:
 	nasm ./loader.asm -o ./loader.bin

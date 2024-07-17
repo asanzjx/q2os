@@ -117,6 +117,31 @@ void (* interrupt[24])(void)=
 	IRQ0x36_interrupt,
 	IRQ0x37_interrupt,
 };
+
+Build_IRQ(0xc8)
+Build_IRQ(0xc9)
+Build_IRQ(0xca)
+Build_IRQ(0xcb)
+Build_IRQ(0xcc)
+Build_IRQ(0xcd)
+Build_IRQ(0xce)
+Build_IRQ(0xcf)
+Build_IRQ(0xd0)
+Build_IRQ(0xd1)
+
+void (* SMP_interrupt[10])(void)=
+{
+	IRQ0xc8_interrupt,
+	IRQ0xc9_interrupt,
+	IRQ0xca_interrupt,
+	IRQ0xcb_interrupt,
+	IRQ0xcc_interrupt,
+	IRQ0xcd_interrupt,
+	IRQ0xce_interrupt,
+	IRQ0xcf_interrupt,
+	IRQ0xd0_interrupt,
+	IRQ0xd1_interrupt,
+};
 // ===========================================
 /*
 
@@ -427,7 +452,8 @@ void IOAPIC_init()
 	for(i = 0x10;i < 0x40;i += 2)
 		ioapic_rte_write(i,0x10020 + ((i - 0x10) >> 1));
 
-	ioapic_rte_write(0x12,0x21);
+	// ioapic rte test
+	// ioapic_rte_write(0x12,0x21);
 	color_printk(GREEN,BLACK,"I/O APIC Redirection Table Entries Set Finished.\n");	
 }
 
@@ -497,20 +523,64 @@ void APIC_IOAPIC_init()
 	// bochs2.6.8 leave double_fault()???
 }
 
+void Local_APIC_edge_level_ack(unsigned long nr){
+	// “向Local APIC的EOI寄存器写入数值00以通知控制器中断处理过程结束”
+		__asm__ __volatile__(	"movq	$0x00,	%%rdx	\n\t"
+					"movq	$0x00,	%%rax	\n\t"
+					"movq 	$0x80b,	%%rcx	\n\t"
+					"wrmsr	\n\t"
+					:::"memory");
+}
 /*
 
 */
 
 void do_IRQ(struct pt_regs * regs,unsigned long nr)	//regs:rsp,nr
 {
-	unsigned char x;
-	irq_desc_T * irq = &interrupt_desc[nr - 32];
+
+	switch (nr & 0x80){
+	case 0x00:
+	{
+		irq_desc_T * irq = &interrupt_desc[nr - 32];
+		// color_printk(RED,BLACK,"\tdo_IRQ receive:%d\n",nr);
+		// 执行中断上半部处理程序
+		if(irq->handler != NULL)
+			irq->handler(nr,irq->parameter,regs);
+		// 用于向中断控制器发送应答消息
+		if(irq->controller != NULL && irq->controller->ack != NULL)
+			irq->controller->ack(nr);
+
+		// “向Local APIC的EOI寄存器写入数值00以通知控制器中断处理过程结束”
+		__asm__ __volatile__(	"movq	$0x00,	%%rdx	\n\t"
+					"movq	$0x00,	%%rax	\n\t"
+					"movq 	$0x80b,	%%rcx	\n\t"
+					"wrmsr	\n\t"
+					:::"memory");
+	}
+	break;
+	case 0x80:
+	{
+		color_printk(RED,BLACK,"\tSMP IPI :%d\n",nr);
+		Local_APIC_edge_level_ack(nr);
+	}
+		break;;
+	default:
+	{
+		color_printk(RED,BLACK,"do_IRQ receive:%d\n",nr);
+	}
+		break;
+	}
+	
+	// unsigned char x;
+	// irq_desc_T * irq = &interrupt_desc[nr - 32];
 
 	// old/PIC interrupt handle 
 /*
 	x = io_in8(0x60);	
 	color_printk(BLUE,WHITE,"(IRQ:%#04x)\tkey code:%#04x\n",nr,x);
 */
+
+/*
 	// “执行中断上半部处理程序”
 	if(irq->handler != NULL)
 		irq->handler(nr,irq->parameter,regs);
@@ -525,5 +595,6 @@ void do_IRQ(struct pt_regs * regs,unsigned long nr)	//regs:rsp,nr
 				"movq 	$0x80b,	%%rcx	\n\t"
 				"wrmsr	\n\t"
 				:::"memory");
+*/
 }
 

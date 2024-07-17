@@ -306,12 +306,14 @@ int color_printk(unsigned int FRcolor,unsigned int BKcolor,const char * fmt,...)
 	int count = 0;
 	int line = 0;
 	va_list args;
+
+	spin_lock(&Pos.printk_lock);
+	// memset(Pos.FB_addr, 0x0, Pos.FB_length);
+	memset(buf, 0x0, 4096);
 	va_start(args, fmt);
-
 	i = vsprintf(buf,fmt, args);
-
 	va_end(args);
-
+	
 	for(count = 0;count < i || line;count++)
 	{
 		////	add \n \b \t
@@ -364,6 +366,7 @@ Label_tab:
 		}
 
 	}
+	spin_unlock(&Pos.printk_lock);
 	return i;
 }
 
