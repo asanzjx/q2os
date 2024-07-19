@@ -36,8 +36,8 @@ all: system
 
 
 ifeq ($(PIC),APIC)
-system:	head.o entry.o APU_boot.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o main.o
-	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o main.o -T Kernel.lds
+system:	head.o entry.o APU_boot.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o
+	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o -T Kernel.lds
 else
 system:	head.o entry.o printk.o trap.o memory.o PIC.o task.o main.o
 	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o trap.o printk.o memory.o PIC.o task.o main.o -T Kernel.lds
@@ -91,6 +91,12 @@ task.o: task.c
 
 SMP.o: SMP.c
 	$(GCC) $(CFLAGS) -c SMP.c
+
+HPET.o: HPET.c
+	$(GCC) $(CFLAGS) -c HPET.c
+
+schedule.o: schedule.c
+	$(GCC) $(CFLAGS) -c schedule.c
 
 loader:
 	nasm ./loader.asm -o ./loader.bin

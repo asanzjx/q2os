@@ -1,8 +1,9 @@
 #ifndef __MEMORY_H__
 #define __MEMORY_H__
 
-#include "printk.h"
+
 #include "lib.h"
+#include "printk.h"
 
 //	8Bytes per cell
 #define PTRS_PER_PAGE	512

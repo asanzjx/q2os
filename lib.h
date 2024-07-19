@@ -2,6 +2,7 @@
 #define __LIB_H__
 
 // =============== Compile & Debug
+// #define DEBUG 1
 #if Bochs
 #define BochsMagicBreakpoint()	\
 	__asm__ __volatile__("xchgw %bx, %bx")
@@ -25,6 +26,9 @@
 #endif
 // ===============
 
+//////////////////////////////////////////////////
+//					Constants					//
+//////////////////////////////////////////////////
 #define NULL 0
 
 #define container_of(ptr,type,member)							\
@@ -42,6 +46,45 @@
 #define io_mfence() 	__asm__ __volatile__ ("mfence	\n\t":::"memory")
 
 #define NR_CPUS 8
+
+struct List
+{
+	struct List * prev;
+	struct List * next;
+};
+
+struct time
+{
+    int second;    //00
+    int minute;    //02
+    int hour;      //04
+    int day;       //07
+    int month;     //08
+    int year;      //09+32
+};
+
+struct timer_list
+{
+    struct List list;
+    unsigned long expect_jiffies;
+    void (* func)(void * data);
+    void *data;
+};
+
+enum
+{
+    HI_SOFTIRQ = 0,  /* 优先级高的 tasklet */
+    TIMER_SOFTIRQ,   /* 定时器的下半部 */
+    TASKLET_SOFTIRQ, /* 正常优先权的 tasklet */
+};
+
+struct softirq
+{
+	void (*action)(void * data);
+	void * data;
+};
+
+
 
 struct pt_regs
 {
@@ -71,11 +114,9 @@ struct pt_regs
 	unsigned long ss;
 };
 
-struct List
-{
-	struct List * prev;
-	struct List * next;
-};
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
 
 inline void list_init(struct List * list)
 {
@@ -473,5 +514,60 @@ inline void get_cpuid(unsigned int Mop,unsigned int Sop,unsigned int * a,unsigne
 					:"0"(Mop),"2"(Sop)
 				);
 }
+
+inline unsigned long get_rsp()
+{
+	unsigned long tmp = 0;
+	__asm__ __volatile__	( "movq	%%rsp, %0	\n\t":"=r"(tmp)::"memory");
+	return tmp;
+}
+
+inline unsigned long get_rflags()
+{
+	unsigned long tmp = 0;
+	__asm__ __volatile__	("pushfq	\n\t"
+				 "movq	(%%rsp), %0	\n\t"
+				 "popfq	\n\t"
+				:"=r"(tmp)::"memory");
+	return tmp;
+}
+
+
+// ========================= atomic
+typedef struct
+{
+    __volatile__ long value;
+} atomic_T;
+
+inline void atomic_add(atomic_T * atomic,long value)
+{
+    __asm__ __volatile__    (    "lock    addq    %1,    %0    \n\t"
+                                 :"=m"(atomic->value):"r"(value):"memory"
+                            );
+}
+inline void atomic_sub(atomic_T *atomic,long value)
+{
+    __asm__ __volatile__    (    "lock    subq    %1,    %0    \n\t"
+                                 :"=m"(atomic->value):"r"(value):"memory"
+                            );
+}
+inline void atomic_inc(atomic_T *atomic)
+{
+    __asm__ __volatile__    (    "lock    incq    %0    \n\t"
+                                 :"=m"(atomic->value):"m"(atomic->value):"memory"
+                            );
+}
+inline void atomic_dec(atomic_T *atomic)
+{
+    __asm__ __volatile__    (    "lock    decq    %0    \n\t"
+                                 :"=m"(atomic->value):"m"(atomic->value):"memory"
+                            );
+}
+
+#define atomic_read(atomic)	((atomic)->value)
+#define atomic_set(atomic,val)	(((atomic)->value) = (val))
+// =========================
+
+
 
 #endif

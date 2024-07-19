@@ -1,9 +1,9 @@
-#include <stdarg.h>
 #include "printk.h"
-#include "lib.h"
-#include "linkage.h"
 #include "memory.h"
 
+extern inline void spin_lock(spinlock_T * lock);
+extern inline void spin_unlock(spinlock_T * lock);
+extern inline long spin_trylock(spinlock_T * lock);
 /*
 
 */
@@ -306,8 +306,10 @@ int color_printk(unsigned int FRcolor,unsigned int BKcolor,const char * fmt,...)
 	int count = 0;
 	int line = 0;
 	va_list args;
-
-	spin_lock(&Pos.printk_lock);
+	if(get_rflags() & 0x200UL)
+	{
+		spin_lock(&Pos.printk_lock);
+	}
 	// memset(Pos.FB_addr, 0x0, Pos.FB_length);
 	memset(buf, 0x0, 4096);
 	va_start(args, fmt);
@@ -366,7 +368,10 @@ Label_tab:
 		}
 
 	}
-	spin_unlock(&Pos.printk_lock);
+	if(get_rflags() & 0x200UL)
+	{
+		spin_unlock(&Pos.printk_lock);
+	}
 	return i;
 }
 

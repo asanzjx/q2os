@@ -31,8 +31,6 @@ extern char _end;
 
 extern unsigned long _stack_start;
 
-
-
 /*
 
 */
@@ -82,28 +80,31 @@ struct thread_struct
 
 */
 
-#define PF_KTHREAD	(1 << 0)
-
 struct task_struct
 {
-	struct List list;
 	volatile long state;
 	unsigned long flags;
+	long preempt_count;
+	long signal;
 
 	struct mm_struct *mm;
 	struct thread_struct *thread;
 
+	struct List list;
+
 	unsigned long addr_limit;	/*0x0000,0000,0000,0000 - 0x0000,7fff,ffff,ffff user*/
 					/*0xffff,8000,0000,0000 - 0xffff,ffff,ffff,ffff kernel*/
-
 	long pid;
-
-	long counter;
-
-	long signal;
-
 	long priority;
+	long vrun_time;
 };
+
+///////struct task_struct->flags:
+
+#define PF_KTHREAD	(1UL << 0)
+#define NEED_SCHEDULE	(1UL << 1)
+
+
 
 union task_union
 {
@@ -111,38 +112,21 @@ union task_union
 	unsigned long stack[STACK_SIZE / sizeof(unsigned long)];
 }__attribute__((aligned (8)));	//8Bytes align
 
-struct mm_struct init_mm;
-struct thread_struct init_thread;
+
 
 #define INIT_TASK(tsk)	\
 {			\
 	.state = TASK_UNINTERRUPTIBLE,		\
 	.flags = PF_KTHREAD,		\
+	.preempt_count = 0,		\
+	.signal = 0,		\
 	.mm = &init_mm,			\
 	.thread = &init_thread,		\
 	.addr_limit = 0xffff800000000000,	\
 	.pid = 0,			\
-	.counter = 1,		\
-	.signal = 0,		\
-	.priority = 0		\
+	.priority = 2,		\
+	.vrun_time = 0		\
 }
-
-union task_union init_task_union __attribute__((__section__ (".data.init_task"))) = {INIT_TASK(init_task_union.task)};
-
-struct task_struct *init_task[NR_CPUS] = {&init_task_union.task,0};
-
-struct mm_struct init_mm = {0};
-
-struct thread_struct init_thread = 
-{
-	.rsp0 = (unsigned long)(init_task_union.stack + STACK_SIZE / sizeof(unsigned long)),
-	.rsp = (unsigned long)(init_task_union.stack + STACK_SIZE / sizeof(unsigned long)),
-	.fs = KERNEL_DS,
-	.gs = KERNEL_DS,
-	.cr2 = 0,
-	.trap_nr = 0,
-	.error_code = 0
-};
 
 /*
 
@@ -185,12 +169,48 @@ struct tss_struct
 	.iomapbaseaddr = 0	\
 }
 
-struct tss_struct init_tss[NR_CPUS] = { [0 ... NR_CPUS-1] = INIT_TSS };
 
 /*
 
 */
 
+
+inline	struct task_struct * get_current()
+{
+	struct task_struct * current = NULL;
+	__asm__ __volatile__ ("andq %%rsp,%0	\n\t":"=r"(current):"0"(~32767UL));
+	return current;
+}
+
+#define current get_current()
+
+#define GET_CURRENT			\
+	"movq	%rsp,	%rbx	\n\t"	\
+	"andq	$-32768,%rbx	\n\t"
+
+/*
+
+*/
+
+
+#define switch_to(prev,next)			\
+do{							\
+	__asm__ __volatile__ (	"pushq	%%rbp	\n\t"	\
+				"pushq	%%rax	\n\t"	\
+				"movq	%%rsp,	%0	\n\t"	\
+				"movq	%2,	%%rsp	\n\t"	\
+				"leaq	1f(%%rip),	%%rax	\n\t"	\
+				"movq	%%rax,	%1	\n\t"	\
+				"pushq	%3		\n\t"	\
+				"jmp	__switch_to	\n\t"	\
+				"1:	\n\t"	\
+				"popq	%%rax	\n\t"	\
+				"popq	%%rbp	\n\t"	\
+				:"=m"(prev->thread->rsp),"=m"(prev->thread->rip)		\
+				:"m"(next->thread->rsp),"m"(next->thread->rip),"D"(prev),"S"(next)	\
+				:"memory"		\
+				);			\
+}while(0)
 
 /*
 
@@ -203,4 +223,78 @@ void task_init();
 
 typedef unsigned long (* system_call_t)(struct pt_regs * regs);
 
+unsigned long no_system_call(struct pt_regs * regs);
+
+unsigned long sys_printf(struct pt_regs * regs);
+
+extern void ret_system_call(void);
+extern void system_call(void);
+
+extern system_call_t system_call_table[MAX_SYSTEM_CALL_NR];
+
+
+extern struct task_struct *init_task[NR_CPUS];
+extern union task_union init_task_union;
+extern struct mm_struct init_mm;
+extern struct thread_struct init_thread;
+
+extern struct tss_struct init_tss[NR_CPUS];
+
+#define preempt_enable()		\
+do					\
+{					\
+	current->preempt_count--;	\
+}while(0)
+
+#define preempt_disable()		\
+do					\
+{					\
+	current->preempt_count++;	\
+}while(0)
+
+inline void spin_lock(spinlock_T * lock)
+{
+	preempt_disable();
+	__asm__	__volatile__	(	"1:	\n\t"
+					"lock	decq	%0	\n\t"
+					"jns	3f	\n\t"
+					"2:	\n\t"
+					"pause	\n\t"
+					"cmpq	$0,	%0	\n\t"
+					"jle	2b	\n\t"
+					"jmp	1b	\n\t"
+					"3:	\n\t"
+					:"=m"(lock->lock)
+					:
+					:"memory"
+				);
+}
+
+/*
+
+*/
+
+inline void spin_unlock(spinlock_T * lock)
+{
+	__asm__	__volatile__	(	"movq	$1,	%0	\n\t"
+					:"=m"(lock->lock)
+					:
+					:"memory"
+				);
+	preempt_enable();
+}
+
+inline long spin_trylock(spinlock_T * lock)
+{
+	unsigned long tmp_value = 0;
+	preempt_disable();
+	__asm__	__volatile__	(	"xchgq	%0,	%1	\n\t"
+				:"=q"(tmp_value),"=m"(lock->lock)
+				:"0"(0)
+				:"memory"
+			);
+	if(!tmp_value)
+		preempt_enable();
+	return tmp_value;
+}
 #endif

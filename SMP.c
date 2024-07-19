@@ -6,6 +6,21 @@
 
 
 //////////////////////////////////////////////////
+//					extern vars					//
+//////////////////////////////////////////////////
+extern unsigned char _APU_boot_start[];
+extern unsigned char _APU_boot_end[];
+
+extern spinlock_T SMP_lock;
+extern int global_i;
+extern irq_desc_T SMP_IPI_desc[10];
+extern void (* SMP_interrupt[10])(void);
+
+// 所有 CPU 的 idle 进程的 PCB，其中 BSP 采用静态创建，AP 的 PCB 在 BSP 中动态创建
+extern struct task_struct *init_task[NR_CPUS];
+
+
+//////////////////////////////////////////////////
 //					Functions					//
 //////////////////////////////////////////////////
 void SMP_init()
@@ -166,6 +181,7 @@ void Start_SMP()
 	
 	color_printk(RED,YELLOW,"\tx2APIC ID:%#010x\t",x);
 
+	memset(current,0,sizeof(struct task_struct));
 	// load_TR(12);
 	load_TR(10 + (global_i -1) * 2);
 	spin_unlock(&SMP_lock);

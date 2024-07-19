@@ -19,20 +19,6 @@
 #define SMP_cpu_id()	(current->cpu_id)
 
 
-//////////////////////////////////////////////////
-//					extern vars					//
-//////////////////////////////////////////////////
-extern unsigned char _APU_boot_start[];
-extern unsigned char _APU_boot_end[];
-
-extern spinlock_T SMP_lock;
-extern int global_i;
-extern irq_desc_T SMP_IPI_desc[10];
-extern void (* SMP_interrupt[10])(void);
-
-// 所有 CPU 的 idle 进程的 PCB，其中 BSP 采用静态创建，AP 的 PCB 在 BSP 中动态创建
-extern struct task_struct *init_task[NR_CPUS];
-
 
 
 //////////////////////////////////////////////////

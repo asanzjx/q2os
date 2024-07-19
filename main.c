@@ -11,26 +11,19 @@
 #include "memory.h"
 #include "task.h"
 #include "interrupt.h"
+#include "schedule.h"
 #include "SMP.h"
 #if APIC
 #include "APIC.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "disk.h"
-
+#include "HPET.h"
 #else
 #include "8259A.h"
 #endif
 
-struct time
-{
-    int second;    //00
-    int minute;    //02
-    int hour;      //04
-    int day;       //07
-    int month;     //08
-    int year;      //09+32
-};
+
 
 
 
@@ -62,7 +55,19 @@ int global_i = 0;
 irq_desc_T SMP_IPI_desc[10] = {0};
 void (* SMP_interrupt[10])(void);
 
-struct time time;
+
+struct time time = {0};
+// 定时功能的队列
+struct timer_list timer_list_head = {{0}, 0};
+
+// 全局软中断状态，64 位，某一位为 1，表示存在某一类的软中断未处理
+unsigned long softirq_status = 0;
+
+struct softirq softirq_vector[64] = {0};
+
+// 记录定时器产生的中断次数，也就是系统时间计数值
+unsigned long volatile jiffies = 0;
+
 
 
 struct Global_Memory_Descriptor memory_management_struct = {{0},0};
@@ -72,7 +77,7 @@ struct Global_Memory_Descriptor memory_management_struct = {{0},0};
 //////////////////////////////////////////////////
 int get_cmos_time(struct time *time)
 {
-    cli();
+    // cli();
     do
     {   time->year =   CMOS_READ(0x09) + CMOS_READ(0x32) * 0x100;
         time->month =  CMOS_READ(0x08);
@@ -82,9 +87,141 @@ int get_cmos_time(struct time *time)
         time->second = CMOS_READ(0x00);
     }while(time->second != CMOS_READ(0x00));
     io_out8(0x70,0x00);
-    sti();
-	color_printk(RED, YELLOW, "\n===========[+]Get COMS time..............\n");
+    // sti();
 }
+
+// ============== sofirq functions
+/**
+ * @brief 注册一个软中断
+ *
+ * @param nr 中断向量号
+ * @param action 软中断处理函数
+ * @param data 软中断处理函数的参数
+ */
+void register_softirq(int nr, void (*action)(void *data), void *data) {
+  softirq_vector[nr].action = action;
+  softirq_vector[nr].data = data;
+}
+
+/**
+ * @brief 注销一个软中断
+ *
+ * @param nr 中断向量号
+ */
+void unregister_softirq(int nr) {
+  softirq_vector[nr].action = NULL;
+  softirq_vector[nr].data = NULL;
+}
+
+void set_softirq_status(unsigned long status) { softirq_status |= status; }
+unsigned long get_softirq_status() { return softirq_status; }
+
+// 初始化软中断
+void softirq_init() {
+  softirq_status = 0;
+  memset(softirq_vector, 0, sizeof(struct softirq) * 64);
+}
+
+/**
+ * @brief 处理系统中当前存在的所有软中断，下半部
+ * 逐个检测中断状态变量softirq_status的各个位。
+ * 如果有某位处于置位状态，系统则调用相应的处理方法，并在执行结束后，复位此状态位。
+ */
+void do_softirq() {
+  int i;
+  // 开中断
+  sti();
+  // 处理所有软中断
+  while (softirq_status) {
+    for (i = 0; i < 64; i++) {
+      if (softirq_status & (1 << i)) {
+        // 调用软中断处理函数
+        softirq_vector[i].action(softirq_vector[i].data);
+        softirq_status &= ~(1 << i); // 复位
+      }
+    }
+  }
+
+  cli();
+}
+
+
+
+// sofirq test timer
+/*
+void do_timer(void * data)
+{
+    color_printk(RED,WHITE,"(HPET:%ld)",jiffies);
+}
+
+void timer_init()
+{
+    jiffies = 0;
+    register_softirq(0,&do_timer,NULL);
+}
+*/
+// ==============
+
+// ============== timer functions
+void init_timer(struct timer_list * timer,void (* func)(void * data),void * data,unsigned long expect_jiffies) {
+    list_init(&timer->list);
+    timer->func = func;
+    timer->data = data;
+    timer->expect_jiffies = jiffies + expect_jiffies;
+}
+
+void add_timer(struct timer_list * timer)
+{
+    struct timer_list * tmp = container_of(list_next(&timer_list_head.list),struct timer_list,list);
+
+    if(list_is_empty(&timer_list_head.list)){
+    }
+    else{
+        while(tmp->expect_jiffies < timer->expect_jiffies)
+            tmp = container_of(list_next(&tmp->list),struct timer_list,list);
+    }
+    list_add_to_behind(&tmp->list,&timer->list);
+}
+
+void del_timer(struct timer_list * timer)
+{
+    list_del(&timer->list);
+}
+
+void do_timer(void * data)
+{
+    struct timer_list * tmp = container_of(list_next(&timer_list_head.list),struct timer_list,list);
+    while((!list_is_empty(&timer_list_head.list)) && (tmp->expect_jiffies <= jiffies))
+    {
+        del_timer(tmp);
+        tmp->func(tmp->data);
+        tmp = container_of(list_next(&timer_list_head.list),struct timer_list,list);
+    }
+
+    color_printk(RED,WHITE,"(HPET:%ld)", jiffies);
+}
+
+void test_timer(void * data)
+{
+    color_printk(BLUE,WHITE,"test_timer");
+}
+
+void timer_init()
+{
+    struct timer_list *tmp = NULL;
+    jiffies = 0;
+    init_timer(&timer_list_head,NULL,NULL,-1UL);
+    register_softirq(0,&do_timer,NULL);
+
+    tmp = (struct timer_list *)kmalloc(sizeof(struct timer_list),0);
+
+    init_timer(tmp,&test_timer,NULL,5);
+    add_timer(tmp);
+}
+
+
+
+// ==============
 /**********
 * global function
 */
@@ -300,6 +437,8 @@ void Start_Kernel(void)
 #if APIC
 	APIC_IOAPIC_init();
 	
+	schedule_init();
+	softirq_init();
 	// 4.1 keyboard diver
 	color_printk(RED,BLACK,"keyboard init \n");
 	keyboard_init();
@@ -338,8 +477,6 @@ void Start_Kernel(void)
 	color_printk(RED,YELLOW,"\n[+]BSP smp init\n");
 	SMP_init();
 	
-	get_cmos_time(&time);
-	color_printk(BLACK, WHITE, "year:%#010x,month:%#010x,day:%#010x,hour:%#010x,mintue:%#010x,second:%#010x\n",time.year,time.month,time.day,time.hour,time.minute, time.second);
 
 #if Bochs
 	// BochsMagicBreakpoint();
@@ -348,7 +485,13 @@ void Start_Kernel(void)
 	init_8259A();
 #endif
 
-
+	color_printk(RED,BLACK,"Timer & Clock init \n");
+	timer_init();
+	// get_cmos_time(&time);
+	// color_printk(BLACK, WHITE, "year:%#010x,month:%#010x,day:%#010x,hour:%#010x,mintue:%#010x,second:%#010x\n",time.year,time.month,time.day,time.hour,time.minute, time.second);
+	color_printk(RED, YELLOW, "\n%s ===========[+]Get COMS time...HPET init...........\n", __func__);
+	HPET_init();
+	sti();
     // 5. multi task
     color_printk(RED,BLACK,"[+] task_init \n");
 	task_init();
