@@ -2,7 +2,7 @@
 #define __LIB_H__
 
 // =============== Compile & Debug
-// #define DEBUG 1
+#define DEBUG 1
 #if Bochs
 #define BochsMagicBreakpoint()	\
 	__asm__ __volatile__("xchgw %bx, %bx")

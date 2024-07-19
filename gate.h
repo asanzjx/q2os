@@ -15,10 +15,17 @@ struct gate_struct
 	unsigned char x[16];
 };
 
+//////////////////////////////////////////////////
+//					extern vars					//
+//////////////////////////////////////////////////
 extern struct desc_struct GDT_Table[];
 extern struct gate_struct IDT_Table[];
-extern unsigned int TSS64_Table[26];
+//extern unsigned int TSS64_Table[26];	// just BSP
 
+
+//////////////////////////////////////////////////
+//					Constants					//
+//////////////////////////////////////////////////
 /*
 
 */
@@ -60,6 +67,10 @@ do{									\
 				:"memory");				\
 }while(0)
 
+
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
 /*
 
 */
@@ -101,20 +112,20 @@ inline void set_system_intr_gate(unsigned int n,unsigned char ist,void * addr)	/
 
 */
 
-void set_tss64(unsigned int * Table, unsigned long rsp0,unsigned long rsp1,unsigned long rsp2,unsigned long ist1,unsigned long ist2,unsigned long ist3,
+void set_tss64(unsigned int * Table,unsigned long rsp0,unsigned long rsp1,unsigned long rsp2,unsigned long ist1,unsigned long ist2,unsigned long ist3,
 unsigned long ist4,unsigned long ist5,unsigned long ist6,unsigned long ist7)
 {
-	*(unsigned long *)(TSS64_Table+1) = rsp0;
-	*(unsigned long *)(TSS64_Table+3) = rsp1;
-	*(unsigned long *)(TSS64_Table+5) = rsp2;
+	*(unsigned long *)(Table+1) = rsp0;
+	*(unsigned long *)(Table+3) = rsp1;
+	*(unsigned long *)(Table+5) = rsp2;
 
-	*(unsigned long *)(TSS64_Table+9) = ist1;
-	*(unsigned long *)(TSS64_Table+11) = ist2;
-	*(unsigned long *)(TSS64_Table+13) = ist3;
-	*(unsigned long *)(TSS64_Table+15) = ist4;
-	*(unsigned long *)(TSS64_Table+17) = ist5;
-	*(unsigned long *)(TSS64_Table+19) = ist6;
-	*(unsigned long *)(TSS64_Table+21) = ist7;	
+	*(unsigned long *)(Table+9) = ist1;
+	*(unsigned long *)(Table+11) = ist2;
+	*(unsigned long *)(Table+13) = ist3;
+	*(unsigned long *)(Table+15) = ist4;
+	*(unsigned long *)(Table+17) = ist5;
+	*(unsigned long *)(Table+19) = ist6;
+	*(unsigned long *)(Table+21) = ist7;	
 }
 
 // kernel_head.S 中定义的 gdt 表

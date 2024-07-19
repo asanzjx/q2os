@@ -1,14 +1,14 @@
 # q2os
- a study os
+    a multi task study os based on x86_64
 
 
 # develop env and tools
 
 - wsl2 ubuntu 22.04 LTS(gcc version 11.4.0) / MacOS
-- bochs 2.8
+- bochs 2.8(compile need with --enable-smp)
 
-```bochs 2.8 compile
-// Compile configure：
+```
+// wsl2 bochs 2.8 Compile configure：
 ./configure --with-x11 --with-wx --enable-debugger --enable-disasm \
  --enable-all-optimizations --enable-readline --enable-long-phy-address \
  --enable-ltdl-install --enable-idle-hack --enable-plugins --enable-a20-pin \
@@ -30,6 +30,7 @@ cp iodev/hdimage/vpc-img.cpp iodev/hdimage/vpc-img.cc
 cp iodev/hdimage/vbox.cpp iodev/hdimage/vbox.cc
 
 ```
+M sillicon MacOS bochs compile configure need to add --with-sdl
 
 # Feature
 
@@ -38,11 +39,15 @@ implement based on Single CPU
 - APIC, based on Local APIC and I/O APIC
 - keyboard, mouse and disk(block device model) driver based on APIC
 - task, user level function, system call
-- multi cores supported, based on SMP
+- multi cores(test env: 1:2:2) supported, based on SMP
 - implement RTC by I/O CMOS
+- support multi cpus task schedule based on IPI and HPET timer(softirq)
 
 // todo..
-[] user function ret
-[] task schedule
-...
-
+```
+[] system call
+[] file system
+[] kernel backtrace
+[] shell env
+[] standard print...
+```

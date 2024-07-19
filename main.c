@@ -394,10 +394,7 @@ void Start_Kernel(void)
     // load_TR(8);
 	load_TR(10);
 
-	// set_tss64(_stack_start, _stack_start, _stack_start, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
-    // set_tss64(0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
-	set_tss64(TSS64_Table,_stack_start, _stack_start, _stack_start, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
-
+	set_tss64((unsigned int *)&init_tss[0],_stack_start, _stack_start, _stack_start, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00, 0xffff800000007c00);
 
     // 2. init exception / interrupt vector
     sys_vector_init();
@@ -424,6 +421,17 @@ void Start_Kernel(void)
 	color_printk(RED,BLACK,"[+] slab init \n");
 	slab_init();
 
+	unsigned char *ptr = (unsigned char *)kmalloc(STACK_SIZE,0) + STACK_SIZE;
+	((struct task_struct *)(ptr - STACK_SIZE))->cpu_id = 0;
+		
+	init_tss[0].ist1 = (unsigned long)ptr;
+	init_tss[0].ist2 = (unsigned long)ptr;
+	init_tss[0].ist3 = (unsigned long)ptr;
+	init_tss[0].ist4 = (unsigned long)ptr;
+	init_tss[0].ist5 = (unsigned long)ptr;
+	init_tss[0].ist6 = (unsigned long)ptr;
+	init_tss[0].ist7 = (unsigned long)ptr;
+
 	color_printk(RED,BLACK,"[+] frame buffer init \n");
 	frame_buffer_init();
 	color_printk(WHITE,BLACK,"[+] frame_buffer_init() is OK \n");
@@ -436,7 +444,10 @@ void Start_Kernel(void)
     // init_interrupt();
 #if APIC
 	APIC_IOAPIC_init();
-	
+#else
+	init_8259A();
+#endif
+
 	schedule_init();
 	softirq_init();
 	// 4.1 keyboard diver
@@ -476,15 +487,13 @@ void Start_Kernel(void)
 	// 4.5 SMP implement based on Local APIC
 	color_printk(RED,YELLOW,"\n[+]BSP smp init\n");
 	SMP_init();
-	
-
-#if Bochs
-	// BochsMagicBreakpoint();
+#if DEBUG
+/*
+	// for SMP #DV exception
+	while(1)
+		hlt();
+*/
 #endif
-#else
-	init_8259A();
-#endif
-
 	color_printk(RED,BLACK,"Timer & Clock init \n");
 	timer_init();
 	// get_cmos_time(&time);

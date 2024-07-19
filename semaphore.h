@@ -17,17 +17,21 @@ typedef struct
 	struct task_struct *tsk;
 } wait_queue_T;
 
-void wait_queue_init(wait_queue_T * wait_queue,struct task_struct *tsk)
-{
-	list_init(&wait_queue->wait_list);
-	wait_queue->tsk = tsk;
-}
-
 typedef struct 
 {
 	atomic_T counter;
 	wait_queue_T wait;
 } semaphore_T;
+
+
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
+void wait_queue_init(wait_queue_T * wait_queue,struct task_struct *tsk)
+{
+	list_init(&wait_queue->wait_list);
+	wait_queue->tsk = tsk;
+}
 
 void semaphore_init(semaphore_T * semaphore,unsigned long count)
 {

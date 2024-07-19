@@ -2,11 +2,12 @@
 #include "printk.h"
 #include "lib.h"
 #include "memory.h"
-#include "linkage.h"
+#include "SMP.h"
 
 
-
-
+//////////////////////////////////////////////////
+//					Global vars					//
+//////////////////////////////////////////////////
 struct mm_struct init_mm = {0};
 
 struct thread_struct init_thread = 
@@ -28,6 +29,9 @@ struct task_struct *init_task[NR_CPUS] = {&init_task_union.task,0};
 
 struct tss_struct init_tss[NR_CPUS] = { [0 ... NR_CPUS-1] = INIT_TSS };
 
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
 system_call_t system_call_table[MAX_SYSTEM_CALL_NR] = 
 {
 	[0] = no_system_call,
@@ -151,6 +155,7 @@ unsigned long do_fork(struct pt_regs * regs, unsigned long clone_flags, unsigned
 	tsk->priority = 2;
 	tsk->pid++;
 	tsk->preempt_count = 0;
+	tsk->cpu_id = SMP_cpu_id();
 	tsk->state = TASK_UNINTERRUPTIBLE;
 
 	thd = (struct thread_struct *)(tsk + 1);
@@ -243,10 +248,12 @@ int kernel_thread(unsigned long (* fn)(unsigned long), unsigned long arg, unsign
 
 inline void __switch_to(struct task_struct *prev,struct task_struct *next)
 {
+	unsigned int color = 0;
 
-	init_tss[0].rsp0 = next->thread->rsp0;
+	init_tss[SMP_cpu_id()].rsp0 = next->thread->rsp0;
+//	init_tss[0].rsp0 = next->thread->rsp0;
 
-	set_tss64(TSS64_Table,init_tss[0].rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
+//	set_tss64(TSS64_Table,init_tss[0].rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
 
 	__asm__ __volatile__("movq	%%fs,	%0 \n\t":"=a"(prev->thread->fs));
 	__asm__ __volatile__("movq	%%gs,	%0 \n\t":"=a"(prev->thread->gs));
@@ -256,10 +263,16 @@ inline void __switch_to(struct task_struct *prev,struct task_struct *next)
 
 	wrmsr(0x175,next->thread->rsp0);
 
-	color_printk(WHITE,BLACK,"prev->thread->rsp0:%#018lx\t",prev->thread->rsp0);
-	color_printk(WHITE,BLACK,"prev->thread->rsp :%#018lx\n",prev->thread->rsp);
-	color_printk(WHITE,BLACK,"next->thread->rsp0:%#018lx\t",next->thread->rsp0);
-	color_printk(WHITE,BLACK,"next->thread->rsp :%#018lx\n",next->thread->rsp);
+	if(SMP_cpu_id() == 0)
+		color = WHITE;
+	else
+		color = YELLOW;
+
+	color_printk(color,BLACK,"prev->thread->rsp0:%#018lx\t",prev->thread->rsp0);
+	color_printk(color,BLACK,"prev->thread->rsp :%#018lx\n",prev->thread->rsp);
+	color_printk(color,BLACK,"next->thread->rsp0:%#018lx\t",next->thread->rsp0);
+	color_printk(color,BLACK,"next->thread->rsp :%#018lx\n",next->thread->rsp);
+	color_printk(color,BLACK,"CPUID:%#018lx\n",SMP_cpu_id());
 }
 
 /*
@@ -283,19 +296,15 @@ void task_init()
 	init_mm.end_brk = memory_management_struct.end_brk;
 
 	init_mm.start_stack = _stack_start;
-
-
-	// init msr
 	
-	// init msr
 	wrmsr(0x174,KERNEL_CS);
 	wrmsr(0x175,current->thread->rsp0);
 	wrmsr(0x176,(unsigned long)system_call);
 	
 //	init_thread,init_tss
-	set_tss64(TSS64_Table,init_thread.rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
+//	set_tss64(TSS64_Table,init_thread.rsp0, init_tss[0].rsp1, init_tss[0].rsp2, init_tss[0].ist1, init_tss[0].ist2, init_tss[0].ist3, init_tss[0].ist4, init_tss[0].ist5, init_tss[0].ist6, init_tss[0].ist7);
 
-	init_tss[0].rsp0 = init_thread.rsp0;
+	init_tss[SMP_cpu_id()].rsp0 = init_thread.rsp0;
 
 	list_init(&init_task_union.task.list);
 

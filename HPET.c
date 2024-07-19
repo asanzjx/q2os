@@ -9,6 +9,7 @@
 #include "memory.h"
 #include "task.h"
 #include "schedule.h"
+#include "SMP.h"
 
 hw_int_controller HPET_int_controller = 
 {
@@ -33,7 +34,17 @@ extern struct timer_list timer_list_head;
 void HPET_handler(unsigned long nr, unsigned long parameter, struct pt_regs * regs)
 {
 	// color_printk(RED,WHITE,"(HPET handle)");
+	struct INT_CMD_REG icr_entry;
 	jiffies++;
+
+	memset(&icr_entry,0,sizeof(struct INT_CMD_REG));
+	icr_entry.vector = 0xc8;
+	icr_entry.dest_shorthand = ICR_ALL_EXCLUDE_Self;
+	icr_entry.trigger = APIC_ICR_IOAPIC_Edge;
+	icr_entry.dest_mode = ICR_IOAPIC_DELV_PHYSICAL;
+	icr_entry.deliver_mode = APIC_ICR_IOAPIC_Fixed;
+	wrmsr(0x830,*(unsigned long *)&icr_entry);
+
     // set_softirq_status(TIMER_SIRQ);
 	if((container_of(list_next(&timer_list_head.list),struct timer_list,list)->expect_jiffies <= jiffies))
         set_softirq_status(TIMER_SIRQ);
@@ -42,20 +53,20 @@ void HPET_handler(unsigned long nr, unsigned long parameter, struct pt_regs * re
     {
         case 0:
         case 1:
-            task_schedule.CPU_exec_task_jiffies--;
+            task_schedule[SMP_cpu_id()].CPU_exec_task_jiffies--;
             current->vrun_time += 1;
             break;
         case 2:
         default:
-            task_schedule.CPU_exec_task_jiffies -= 2;
+            task_schedule[SMP_cpu_id()].CPU_exec_task_jiffies -= 2;
             current->vrun_time += 2;
             break;
     }
-    if(task_schedule.CPU_exec_task_jiffies <= 0)
+    if(task_schedule[SMP_cpu_id()].CPU_exec_task_jiffies <= 0)
         current->flags |= NEED_SCHEDULE;
 
 	#if DEBUG
-// /*
+/*
 		struct task_struct *tsk = NULL;
 		tsk = get_next_task();
 		color_printk(RED,BLACK,"[+]%s #cur 0x%p, list prev->0x%p, next->0x%p, pid: %d, vrun_time:%d; \
@@ -65,7 +76,7 @@ void HPET_handler(unsigned long nr, unsigned long parameter, struct pt_regs * re
 		tsk, tsk->list.prev, tsk->list.next, tsk->pid, tsk->vrun_time,	\
 		&task_schedule, task_schedule.CPU_exec_task_jiffies, task_schedule.task_queue);
 		BochsMagicBreakpoint();
-// */
+*/
 	#endif
 
 }

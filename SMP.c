@@ -3,6 +3,7 @@
 ***************************************************/
 
 #include "SMP.h"
+#include "schedule.h"
 
 
 //////////////////////////////////////////////////
@@ -19,10 +20,31 @@ extern void (* SMP_interrupt[10])(void);
 // 所有 CPU 的 idle 进程的 PCB，其中 BSP 采用静态创建，AP 的 PCB 在 BSP 中动态创建
 extern struct task_struct *init_task[NR_CPUS];
 
+extern struct tss_struct init_tss[NR_CPUS];
 
 //////////////////////////////////////////////////
 //					Functions					//
 //////////////////////////////////////////////////
+
+void IPI_0x200(unsigned long nr, unsigned long parameter, struct pt_regs * regs)
+{
+	switch(current->priority)
+	{
+		case 0:
+		case 1:
+			task_schedule[SMP_cpu_id()].CPU_exec_task_jiffies--;
+			current->vrun_time += 1;
+			break;
+		case 2:
+		default:
+			task_schedule[SMP_cpu_id()].CPU_exec_task_jiffies -= 2;
+			current->vrun_time += 2;
+			break;
+	}
+	if(task_schedule[SMP_cpu_id()].CPU_exec_task_jiffies <= 0)
+		current->flags |= NEED_SCHEDULE;
+}
+
 void SMP_init()
 {
 	int i;
@@ -46,14 +68,15 @@ void SMP_init()
 	// 0x1 spin lock
 	spin_init(&SMP_lock);
 	// 0x2 init AP interrupt
-// /*
 	for(i = 200;i < 210;i++)
 	{
 		// set_intr_gate(i , 2 , SMP_interrupt[i - 200]);
 		set_intr_gate(i , 0, SMP_interrupt[i - 200]);
 	}
 	memset(SMP_IPI_desc,0,sizeof(irq_desc_T) * 10);
-// */
+
+	register_IPI(200,NULL,&IPI_0x200,NULL,NULL,"IPI 0x200");
+
 
 	// 0x3 init IPI
 	// =============== BSP send IPI message
@@ -79,15 +102,32 @@ void SMP_init()
 
 	// 0x4 Startup IPI
 	// 1 BSP, 3 APs
+	unsigned char * ptr = NULL;
 	for(global_i = 1; global_i < 4; global_i++) {
 		spin_lock(&SMP_lock);
-		_stack_start = (unsigned long)kmalloc(STACK_SIZE, 0) + STACK_SIZE;
-		// ((struct task_struct *)(_stack_start - STACK_SIZE))->cpu_id = global_i;
 
-		unsigned int *tss = (unsigned int *)kmalloc(128,0);
+		ptr = (unsigned char *)kmalloc(STACK_SIZE,0);
+		_stack_start = (unsigned long)ptr + STACK_SIZE;
+		((struct task_struct *)ptr)->cpu_id = global_i;
 
-		set_tss_descriptor(10 + global_i * 2,tss);
-		set_tss64(tss,_stack_start,_stack_start,_stack_start,_stack_start,_stack_start,_stack_start,_stack_start,_stack_start,_stack_start,_stack_start);
+		memset(&init_tss[global_i],0,sizeof(struct tss_struct));
+
+		init_tss[global_i].rsp0 = _stack_start;
+		init_tss[global_i].rsp1 = _stack_start;
+		init_tss[global_i].rsp2 = _stack_start;
+
+		ptr = (unsigned char *)kmalloc(STACK_SIZE,0) + STACK_SIZE;
+		((struct task_struct *)(ptr - STACK_SIZE))->cpu_id = global_i;
+		
+		init_tss[global_i].ist1 = (unsigned long)ptr;
+		init_tss[global_i].ist2 = (unsigned long)ptr;
+		init_tss[global_i].ist3 = (unsigned long)ptr;
+		init_tss[global_i].ist4 = (unsigned long)ptr;
+		init_tss[global_i].ist5 = (unsigned long)ptr;
+		init_tss[global_i].ist6 = (unsigned long)ptr;
+		init_tss[global_i].ist7 = (unsigned long)ptr;
+
+		set_tss_descriptor(10 + global_i * 2,&init_tss[global_i]);
 		
 		icr_entry.vector = 0x20;
 		icr_entry.deliver_mode = ICR_Start_up;
@@ -106,9 +146,6 @@ void SMP_init()
 	icr_entry.vector = 0xc9;
 	wrmsr(0x830, *(unsigned long *)&icr_entry);
     // =============== 
-
-
-//	register_IPI(200,NULL,&IPI_0x200,NULL,NULL,"IPI 0x200");
 	
 	color_printk(RED,YELLOW,"\n[+]APU end init...\n");
 #if Bochs
@@ -122,7 +159,7 @@ void Start_SMP()
 #if Bochs
 	// BochsMagicBreakpoint();
 #endif
-	color_printk(RED,YELLOW,"\n\tAP %#010x starting......\n", global_i);
+	// color_printk(RED,YELLOW,"\n\tAP %#010x starting......\n", global_i);
 
 	//enable xAPIC & x2APIC
 	__asm__ __volatile__(	"movq 	$0x1b,	%%rcx	\n\t"
@@ -140,7 +177,7 @@ void Start_SMP()
     int ap_xapic = 0;
 	if(x&0xc00)
         ap_xapic = 1;
-		color_printk(RED,YELLOW,"\tAP xAPIC & x2APIC enabled\n");
+		// color_printk(RED,YELLOW,"\tAP xAPIC & x2APIC enabled\n");
 
     //enable SVR[8] SVR[12]
 #if Bochs
@@ -179,13 +216,34 @@ void Start_SMP()
 				:
 				:"memory");
 	
-	color_printk(RED,YELLOW,"\tx2APIC ID:%#010x\t",x);
+	// color_printk(RED,YELLOW,"\tx2APIC ID:%#010x\t",x);
 
-	memset(current,0,sizeof(struct task_struct));
-	// load_TR(12);
+	// ============================= AP create idle
+	current->state = TASK_RUNNING;
+	current->flags = PF_KTHREAD;
+	current->mm = &init_mm;
+
+	list_init(&current->list);
+	current->addr_limit = 0xffff800000000000;
+	current->priority = 2;
+	current->vrun_time = 0;
+
+
+	current->thread = (struct thread_struct *)(current + 1);
+	memset(current->thread,0,sizeof(struct thread_struct));
+	current->thread->rsp0 = _stack_start;
+	current->thread->rsp = _stack_start;
+	current->thread->fs = KERNEL_DS;
+	current->thread->gs = KERNEL_DS;
+	init_task[SMP_cpu_id()] = current;
+	// =============================
+
+	// !!! commit after import ap tss 
+	// memset(current,0,sizeof(struct task_struct));
 	load_TR(10 + (global_i -1) * 2);
 	spin_unlock(&SMP_lock);
-	color_printk(RED,YELLOW,"\tAPU %#010x init end, starting hlt...\n", global_i);
+	current->preempt_count = 0;	// !!!for preempt of multi cpus and idle
+	// color_printk(RED,YELLOW,"\tAPU %#010x init end, starting hlt...\n", global_i);
 
 #if Bochs
 	// BochsMagicBreakpoint();
@@ -194,8 +252,22 @@ void Start_SMP()
 	sti();
 
 	// ==== multi core exception test
-	// int i = 1/0;
+	// must close color_printk above
+/*
+	int i = 1;
+	int cpu_id = SMP_cpu_id();
+	if(cpu_id != 1)
+	{
+		color_printk(RED,YELLOW,"\n\tAPU %#010x init end, starting hlt...\n", cpu_id);
+		// BochsMagicBreakpoint();
+		i = 1/0;
+	}
+		
+*/
 	// ====
+
+	if(SMP_cpu_id() == 3)
+		task_init();
 
 	while(1){
         hlt();

@@ -6,61 +6,6 @@
 #include "lib.h"
 #include "gate.h"
 
-#define KERNEL_CS 	(0x08)
-#define	KERNEL_DS 	(0x10)
-
-#define	USER_CS		(0x28)
-#define USER_DS		(0x30)
-
-#define CLONE_FS	(1 << 0)
-#define CLONE_FILES	(1 << 1)
-#define CLONE_SIGNAL	(1 << 2)
-
-// stack size 32K
-#define STACK_SIZE 32768
-
-extern char _text;
-extern char _etext;
-extern char _data;
-extern char _edata;
-extern char _rodata;
-extern char _erodata;
-extern char _bss;
-extern char _ebss;
-extern char _end;
-
-extern unsigned long _stack_start;
-
-/*
-
-*/
-
-#define TASK_RUNNING		(1 << 0)
-#define TASK_INTERRUPTIBLE	(1 << 1)
-#define	TASK_UNINTERRUPTIBLE	(1 << 2)
-#define	TASK_ZOMBIE		(1 << 3)	
-#define	TASK_STOPPED		(1 << 4)
-
-/*
-
-*/
-
-
-struct mm_struct
-{
-	pml4t_t *pgd;	//page table point
-	
-	unsigned long start_code,end_code;
-	unsigned long start_data,end_data;
-	unsigned long start_rodata,end_rodata;
-	unsigned long start_brk,end_brk;
-	unsigned long start_stack;	
-};
-
-/*
-
-*/
-
 struct thread_struct
 {
 	unsigned long rsp0;	//in tss
@@ -76,9 +21,17 @@ struct thread_struct
 	unsigned long error_code;
 };
 
-/*
+struct mm_struct
+{
+	pml4t_t *pgd;	//page table point
+	
+	unsigned long start_code,end_code;
+	unsigned long start_data,end_data;
+	unsigned long start_rodata,end_rodata;
+	unsigned long start_brk,end_brk;
+	unsigned long start_stack;	
+};
 
-*/
 
 struct task_struct
 {
@@ -86,6 +39,7 @@ struct task_struct
 	unsigned long flags;
 	long preempt_count;
 	long signal;
+	long cpu_id;		//CPU ID
 
 	struct mm_struct *mm;
 	struct thread_struct *thread;
@@ -98,39 +52,6 @@ struct task_struct
 	long priority;
 	long vrun_time;
 };
-
-///////struct task_struct->flags:
-
-#define PF_KTHREAD	(1UL << 0)
-#define NEED_SCHEDULE	(1UL << 1)
-
-
-
-union task_union
-{
-	struct task_struct task;
-	unsigned long stack[STACK_SIZE / sizeof(unsigned long)];
-}__attribute__((aligned (8)));	//8Bytes align
-
-
-
-#define INIT_TASK(tsk)	\
-{			\
-	.state = TASK_UNINTERRUPTIBLE,		\
-	.flags = PF_KTHREAD,		\
-	.preempt_count = 0,		\
-	.signal = 0,		\
-	.mm = &init_mm,			\
-	.thread = &init_thread,		\
-	.addr_limit = 0xffff800000000000,	\
-	.pid = 0,			\
-	.priority = 2,		\
-	.vrun_time = 0		\
-}
-
-/*
-
-*/
 
 struct tss_struct
 {
@@ -151,6 +72,56 @@ struct tss_struct
 	unsigned short iomapbaseaddr;
 }__attribute__((packed));
 
+// !!!here, others compile question!!!
+typedef unsigned long (* system_call_t)(struct pt_regs * regs);
+//////////////////////////////////////////////////
+//					Constants					//
+//////////////////////////////////////////////////
+#define KERNEL_CS 	(0x08)
+#define	KERNEL_DS 	(0x10)
+
+#define	USER_CS		(0x28)
+#define USER_DS		(0x30)
+
+#define CLONE_FS	(1 << 0)
+#define CLONE_FILES	(1 << 1)
+#define CLONE_SIGNAL	(1 << 2)
+
+// stack size 32K
+#define STACK_SIZE 32768
+
+#define TASK_RUNNING		(1 << 0)
+#define TASK_INTERRUPTIBLE	(1 << 1)
+#define	TASK_UNINTERRUPTIBLE	(1 << 2)
+#define	TASK_ZOMBIE		(1 << 3)	
+#define	TASK_STOPPED		(1 << 4)
+
+
+///////struct task_struct->flags:
+
+#define PF_KTHREAD	(1UL << 0)
+#define NEED_SCHEDULE	(1UL << 1)
+
+#define MAX_SYSTEM_CALL_NR 128
+
+#define INIT_TASK(tsk)	\
+{			\
+	.state = TASK_UNINTERRUPTIBLE,		\
+	.flags = PF_KTHREAD,		\
+	.preempt_count = 0,		\
+	.signal = 0,		\
+	.cpu_id = 0,		\
+	.mm = &init_mm,			\
+	.thread = &init_thread,		\
+	.addr_limit = 0xffff800000000000,	\
+	.pid = 0,			\
+	.priority = 2,		\
+	.vrun_time = 0		\
+}
+
+/*
+
+*/
 #define INIT_TSS \
 {	.reserved0 = 0,	 \
 	.rsp0 = (unsigned long)(init_task_union.stack + STACK_SIZE / sizeof(unsigned long)),	\
@@ -168,12 +139,6 @@ struct tss_struct
 	.reserved3 = 0,	\
 	.iomapbaseaddr = 0	\
 }
-
-
-/*
-
-*/
-
 
 inline	struct task_struct * get_current()
 {
@@ -212,20 +177,32 @@ do{							\
 				);			\
 }while(0)
 
-/*
+#define preempt_enable()		\
+do					\
+{					\
+	current->preempt_count--;	\
+}while(0)
 
-*/
+#define preempt_disable()		\
+do					\
+{					\
+	current->preempt_count++;	\
+}while(0)
 
-unsigned long do_fork(struct pt_regs * regs, unsigned long clone_flags, unsigned long stack_start, unsigned long stack_size);
-void task_init();
+//////////////////////////////////////////////////
+//					extern vars					//
+//////////////////////////////////////////////////
+extern char _text;
+extern char _etext;
+extern char _data;
+extern char _edata;
+extern char _rodata;
+extern char _erodata;
+extern char _bss;
+extern char _ebss;
+extern char _end;
 
-#define MAX_SYSTEM_CALL_NR 128
-
-typedef unsigned long (* system_call_t)(struct pt_regs * regs);
-
-unsigned long no_system_call(struct pt_regs * regs);
-
-unsigned long sys_printf(struct pt_regs * regs);
+extern unsigned long _stack_start;
 
 extern void ret_system_call(void);
 extern void system_call(void);
@@ -240,17 +217,19 @@ extern struct thread_struct init_thread;
 
 extern struct tss_struct init_tss[NR_CPUS];
 
-#define preempt_enable()		\
-do					\
-{					\
-	current->preempt_count--;	\
-}while(0)
+union task_union
+{
+	struct task_struct task;
+	unsigned long stack[STACK_SIZE / sizeof(unsigned long)];
+}__attribute__((aligned (8)));	//8Bytes align
 
-#define preempt_disable()		\
-do					\
-{					\
-	current->preempt_count++;	\
-}while(0)
+
+
+
+
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
 
 inline void spin_lock(spinlock_T * lock)
 {
@@ -297,4 +276,14 @@ inline long spin_trylock(spinlock_T * lock)
 		preempt_enable();
 	return tmp_value;
 }
+
+
+unsigned long do_fork(struct pt_regs * regs, unsigned long clone_flags, unsigned long stack_start, unsigned long stack_size);
+void task_init();
+
+unsigned long no_system_call(struct pt_regs * regs);
+
+unsigned long sys_printf(struct pt_regs * regs);
+
+
 #endif

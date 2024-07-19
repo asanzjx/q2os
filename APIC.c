@@ -10,6 +10,16 @@
 
 #include "task.h"
 
+
+//////////////////////////////////////////////////
+//					extern vars					//
+//////////////////////////////////////////////////
+// --- main.c
+extern irq_desc_T SMP_IPI_desc[10];
+
+//////////////////////////////////////////////////
+//					Constants					//
+//////////////////////////////////////////////////
 // ===================================== 8259A
 #define SAVE_ALL				\
 	"cld;			\n\t"		\
@@ -143,6 +153,11 @@ void (* SMP_interrupt[10])(void)=
 	IRQ0xd1_interrupt,
 };
 // ===========================================
+
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
+
 /*
 
 */
@@ -574,6 +589,10 @@ void do_IRQ(struct pt_regs * regs,unsigned long nr)	//regs:rsp,nr
 	{
 		color_printk(RED,BLACK,"\tSMP IPI :%d\n",nr);
 		Local_APIC_edge_level_ack(nr);
+		irq_desc_T * irq = &SMP_IPI_desc[nr - 200];
+
+		if(irq->handler != NULL)
+			irq->handler(nr,irq->parameter,regs);
 	}
 		break;;
 	default:

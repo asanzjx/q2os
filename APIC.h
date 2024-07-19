@@ -172,6 +172,10 @@ struct IO_APIC_RET_entry
 		}destination;
 }__attribute__((packed));
 
+
+//////////////////////////////////////////////////
+//					Constants					//
+//////////////////////////////////////////////////
 /*
 
 */
@@ -246,7 +250,9 @@ struct IOAPIC_map
 
 
 
-
+//////////////////////////////////////////////////
+//					Functions					//
+//////////////////////////////////////////////////
 unsigned long ioapic_rte_read(unsigned char index);
 void ioapic_rte_write(unsigned char index,unsigned long value);
 
