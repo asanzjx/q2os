@@ -19,25 +19,31 @@ ifeq ($(shell arch),x86_64)
 	as = as
 	LD = ld
 	OBJCOPY = objcopy
+	NM = nm
 else
 	GCC = x86_64-elf-gcc
 	AS = x86_64-elf-as
 	LD = x86_64-elf-ld
 	OBJCOPY = x86_64-elf-objcopy
 	OBJDUMP := x86_64-elf-objdump
+	NM = x86_64-elf-nm
 endif
 
-all: system
+all: system_no_kallsyms kallsyms.o
+	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o kallsyms.o fat32.o VFS.o -T Kernel.lds
 	$(OBJCOPY) -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
-	rm -rf *.o *.as
+	rm -rf kallsyms kallsyms.S *.o *.as
 	$(OBJDUMP) -d ./system > system.bin.asm
 # make -C $(WORKDIR)/deploy
 	cd $(WORKDIR)/deploy && ./deploy_kernel.sh 
 
 
 ifeq ($(PIC),APIC)
-system:	head.o entry.o APU_boot.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o
-	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o -T Kernel.lds
+# system_no_kallsyms:	head.o entry.o APU_boot.o backtrace.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o sys.o syscalls.o
+# 	$(LD) -b elf64-x86-64 -z muldefs -o system_no_kallsyms head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o sys.o syscalls.o -T Kernel.lds
+system_no_kallsyms:	head.o entry.o APU_boot.o backtrace.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o
+	$(LD) -b elf64-x86-64 -z muldefs -o system_no_kallsyms head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o -T Kernel.lds
+
 else
 system:	head.o entry.o printk.o trap.o memory.o PIC.o task.o main.o
 	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o trap.o printk.o memory.o PIC.o task.o main.o -T Kernel.lds
@@ -98,11 +104,31 @@ HPET.o: HPET.c
 schedule.o: schedule.c
 	$(GCC) $(CFLAGS) -c schedule.c
 
+backtrace.o: backtrace.c
+	$(GCC) $(CFLAGS) -c backtrace.c
+
+kallsyms.o: kallsyms.c system_no_kallsyms
+	gcc -o kallsyms kallsyms.c
+	$(NM) -n system_no_kallsyms | ./kallsyms > kallsyms.S
+	$(GCC) -c kallsyms.S
+
+fat32.o: fat32.c
+	$(GCC)  $(CFLAGS) -c fat32.c
+
+VFS.o: VFS.c
+	$(GCC)  $(CFLAGS) -c VFS.c
+
+sys.o: sys.c
+	$(GCC)  $(CFLAGS) -c sys.c
+
+syscalls.o: syscalls.c
+	$(GCC)  $(CFLAGS) -c syscalls.c
+
 loader:
 	nasm ./loader.asm -o ./loader.bin
 
 clean:
-	rm -rf *.o *.s system* kernel.bin*
+	rm -rf *.o *.s system* kernel.bin* kallsyms kallsyms.S
 
 test:
 	@echo $(MAKE_VERSION)

@@ -14,11 +14,12 @@
 
 */
 
+/*
 typedef struct
 {
 	__volatile__ unsigned long lock;		//1:unlock,0:lock
 }spinlock_T;
-
+*/
 /*
 
 */

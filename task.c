@@ -48,6 +48,11 @@ unsigned long no_system_call(struct pt_regs * regs)
 unsigned long sys_printf(struct pt_regs * regs)
 {
 	color_printk(BLACK,WHITE,(char *)regs->rdi);
+
+		// temp disk1 test
+	color_printk(RED,BLACK,"FAT32 init \n");
+	DISK1_FAT32_FS_init();	// FAT32.c
+
 	return 1;
 }
 
@@ -103,7 +108,8 @@ unsigned long do_execve(struct pt_regs * regs)
 	flush_tlb();
 	
 	if(!(current->flags & PF_KTHREAD))
-		current->addr_limit = 0xffff800000000000;
+		current->addr_limit = TASK_SIZE;
+		// current->addr_limit = 0xffff800000000000;
 
 	memcpy(user_level_function,(void *)0x800000,1024);
 
@@ -267,12 +273,13 @@ inline void __switch_to(struct task_struct *prev,struct task_struct *next)
 		color = WHITE;
 	else
 		color = YELLOW;
-
+/*
 	color_printk(color,BLACK,"prev->thread->rsp0:%#018lx\t",prev->thread->rsp0);
 	color_printk(color,BLACK,"prev->thread->rsp :%#018lx\n",prev->thread->rsp);
 	color_printk(color,BLACK,"next->thread->rsp0:%#018lx\t",next->thread->rsp0);
 	color_printk(color,BLACK,"next->thread->rsp :%#018lx\n",next->thread->rsp);
 	color_printk(color,BLACK,"CPUID:%#018lx\n",SMP_cpu_id());
+	*/
 }
 
 /*

@@ -57,12 +57,14 @@ void schedule()
 	struct task_struct *tsk = NULL;
 	long cpu_id = SMP_cpu_id();
 
+	// !!!maybe not schedule
+	// cli();
 	current->flags &= ~NEED_SCHEDULE;
 	tsk = get_next_task();
-
-	color_printk(RED,BLACK,"#schedule:%d#\n",jiffies);
+	// color_printk(RED,BLACK,"RFLAGS:%#018lx\n",get_rflags());
+	// color_printk(RED,BLACK,"#schedule:%d#\n",jiffies);
 	
-	if(current->vrun_time >= tsk->vrun_time)
+	if(current->vrun_time >= tsk->vrun_time || current->state != TASK_RUNNING)
 	{
 		if(current->state == TASK_RUNNING)
 			insert_task_queue(current);
@@ -99,6 +101,7 @@ void schedule()
 					break;
 			}
 	}
+	// sti();
 }
 
 void schedule_init()

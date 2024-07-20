@@ -1,0 +1,4 @@
+
+.DS_Store
+deploy/q2os_ata_disk.img
+deploy/q2os_ata_fat32.img

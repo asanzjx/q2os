@@ -256,7 +256,7 @@ void Start_SMP()
 /*
 	int i = 1;
 	int cpu_id = SMP_cpu_id();
-	if(cpu_id != 1)
+	if(cpu_id == 1)
 	{
 		color_printk(RED,YELLOW,"\n\tAPU %#010x init end, starting hlt...\n", cpu_id);
 		// BochsMagicBreakpoint();
@@ -266,8 +266,10 @@ void Start_SMP()
 */
 	// ====
 
+#if OPEN_IRQ_FORWARD
 	if(SMP_cpu_id() == 3)
 		task_init();
+#endif
 
 	while(1){
         hlt();

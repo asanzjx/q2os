@@ -113,7 +113,7 @@ typedef unsigned long (* system_call_t)(struct pt_regs * regs);
 	.cpu_id = 0,		\
 	.mm = &init_mm,			\
 	.thread = &init_thread,		\
-	.addr_limit = 0xffff800000000000,	\
+	.addr_limit = 0xffffffffffffffff,	\
 	.pid = 0,			\
 	.priority = 2,		\
 	.vrun_time = 0		\

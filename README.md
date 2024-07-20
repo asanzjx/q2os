@@ -32,22 +32,23 @@ cp iodev/hdimage/vbox.cpp iodev/hdimage/vbox.cc
 ```
 M sillicon MacOS bochs compile configure need to add --with-sdl
 
+FAT32 img  create: 4kb, 2GB
+
 # Feature
 
 implement based on Single CPU
 - Advanced memory manage, based on SLAB
-- APIC, based on Local APIC and I/O APIC
+- interrupt, support APIC and 8259A, implement Local APIC and I/O APIC
 - keyboard, mouse and disk(block device model) driver based on APIC
 - task, user level function, system call
 - multi cores(test env: 1:2:2) supported, based on SMP
 - implement RTC by I/O CMOS
-- support multi cpus task schedule based on IPI and HPET timer(softirq)
+- support multi cpus task schedule based on CFS schedult strategy， IPI and HPET timer(softirq)
+- trap exception with regs display and kernel backtrace
+- file system, based on FAT32 and VFS
 
 // todo..
 ```
-[] system call
-[] file system
-[] kernel backtrace
+[] POSIX system call
 [] shell env
-[] standard print...
 ```

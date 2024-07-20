@@ -13,6 +13,7 @@
 #include "interrupt.h"
 #include "schedule.h"
 #include "SMP.h"
+#include "VFS.h"
 #if APIC
 #include "APIC.h"
 #include "keyboard.h"
@@ -72,6 +73,7 @@ unsigned long volatile jiffies = 0;
 
 struct Global_Memory_Descriptor memory_management_struct = {{0},0};
 
+struct file *g_file_struct[TASK_FILE_MAX] = {0};
 //////////////////////////////////////////////////
 //					Functions					//
 //////////////////////////////////////////////////

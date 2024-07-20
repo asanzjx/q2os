@@ -34,9 +34,10 @@ extern struct timer_list timer_list_head;
 void HPET_handler(unsigned long nr, unsigned long parameter, struct pt_regs * regs)
 {
 	// color_printk(RED,WHITE,"(HPET handle)");
-	struct INT_CMD_REG icr_entry;
 	jiffies++;
 
+#if OPEN_IRQ_FORWARD
+	struct INT_CMD_REG icr_entry;
 	memset(&icr_entry,0,sizeof(struct INT_CMD_REG));
 	icr_entry.vector = 0xc8;
 	icr_entry.dest_shorthand = ICR_ALL_EXCLUDE_Self;
@@ -44,6 +45,7 @@ void HPET_handler(unsigned long nr, unsigned long parameter, struct pt_regs * re
 	icr_entry.dest_mode = ICR_IOAPIC_DELV_PHYSICAL;
 	icr_entry.deliver_mode = APIC_ICR_IOAPIC_Fixed;
 	wrmsr(0x830,*(unsigned long *)&icr_entry);
+#endif
 
     // set_softirq_status(TIMER_SIRQ);
 	if((container_of(list_next(&timer_list_head.list),struct timer_list,list)->expect_jiffies <= jiffies))

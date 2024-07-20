@@ -3,6 +3,14 @@
 
 // =============== Compile & Debug
 #define DEBUG 1
+// #define OPEN_IRQ_FORWARD	1
+// #define CLEAN_SCREEN	1	// !!!be care for, cased panic without spin_lock irq manage; and too slow !!!
+
+// --- TEST ---
+#define TEST_DISK1_FAT32	1
+// #define TEST_SYSCALL	1
+// ------------
+
 #if Bochs
 #define BochsMagicBreakpoint()	\
 	__asm__ __volatile__("xchgw %bx, %bx")
@@ -30,7 +38,8 @@
 //					Constants					//
 //////////////////////////////////////////////////
 #define NULL 0
-
+#define	TASK_SIZE	((unsigned long)0x00007fffffffffff)
+#define TASK_FILE_MAX	10
 #define container_of(ptr,type,member)							\
 ({											\
 	typeof(((type *)0)->member) * p = (ptr);					\
@@ -44,6 +53,52 @@
 #define cli()	 	__asm__ __volatile__ ("cli	\n\t":::"memory")
 #define nop() 		__asm__ __volatile__ ("nop	\n\t")
 #define io_mfence() 	__asm__ __volatile__ ("mfence	\n\t":::"memory")
+#define local_irq_disable()	cli();
+#define local_irq_enable()	sti();
+#define local_irq_save(x)	__asm__ __volatile__("pushfq ; popq %0 ; cli":"=g"(x)::"memory")
+#define local_irq_restore(x)	__asm__ __volatile__("pushq %0 ; popfq"::"g"(x):"memory")
+
+// === spin lock with irq manage
+typedef struct
+{
+	__volatile__ unsigned long lock;		//1:unlock,0:lock
+}spinlock_T;
+
+extern inline void spin_lock(spinlock_T * lock);
+extern inline void spin_unlock(spinlock_T * lock);
+extern inline long spin_trylock(spinlock_T * lock);
+
+#define spin_lock_irqsave(lock,flags)	\
+do					\
+{					\
+	local_irq_save(flags);		\
+	spin_lock(lock);		\
+}while(0)
+
+#define spin_unlock_irqrestore(lock,flags)	\
+do						\
+{						\
+	spin_unlock(lock);			\
+	local_irq_restore(flags);		\
+}while(0)
+
+#define spin_lock_irqsave(lock,flags)	\
+do					\
+{					\
+	local_irq_save(flags);		\
+	spin_lock(lock);		\
+}while(0)
+
+#define spin_unlock_irqrestore(lock,flags)	\
+do						\
+{						\
+	spin_unlock(lock);			\
+	local_irq_restore(flags);		\
+}while(0)
+
+
+// ===
+
 
 #define NR_CPUS 8
 
@@ -568,6 +623,66 @@ inline void atomic_dec(atomic_T *atomic)
 #define atomic_set(atomic,val)	(((atomic)->value) = (val))
 // =========================
 
+// ========================= for user application
+inline long verify_area(unsigned char* addr,unsigned long size)
+{
+	if(((unsigned long)addr + size) <= (unsigned long)0x00007fffffffffff )
+		return 1;
+	else
+		return 0;
+}
 
+inline long copy_from_user(void * from,void * to,unsigned long size)
+{
+	unsigned long d0,d1;
+	if(!verify_area(from,size))
+		return 0;
+	__asm__ __volatile__	(	"rep	\n\t"
+					 "movsq	\n\t"
+					 "movq	%3,	%0	\n\t"
+					 "rep	\n\t"
+					 "movsb	\n\t"
+					:"=&c"(size),"=&D"(d0),"=&S"(d1)
+					:"r"(size & 7),"0"(size / 8),"1"(to),"2"(from)
+					:"memory"
+				);
+	return size;
+}
+
+inline long copy_to_user(void * from,void * to,unsigned long size)
+{
+	unsigned long d0,d1;
+	if(!verify_area(to,size))
+		return 0;
+	__asm__ __volatile__	(	"rep	\n\t"
+				 	"movsq	\n\t"
+				 	"movq	%3,	%0	\n\t"
+					 "rep	\n\t"
+					 "movsb	\n\t"
+					:"=&c"(size),"=&D"(d0),"=&S"(d1)
+					:"r"(size & 7),"0"(size / 8),"1"(to),"2"(from)
+					:"memory"
+				);
+	return size;
+}
+
+inline long strncpy_from_user(void * from,void * to,unsigned long size)
+{
+	if(!verify_area(from,size))
+		return 0;
+
+	strncpy(to,from,size);
+	return	size;
+}
+
+inline long strnlen_user(void * src,unsigned long maxlen)
+{
+	unsigned long size = strlen(src);
+	if(!verify_area(src,size))
+		return 0;
+
+	return size <= maxlen ? size : maxlen;
+}
+// =========================
 
 #endif

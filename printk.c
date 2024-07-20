@@ -1,9 +1,9 @@
+#include "lib.h"
 #include "printk.h"
 #include "memory.h"
 
-extern inline void spin_lock(spinlock_T * lock);
-extern inline void spin_unlock(spinlock_T * lock);
-extern inline long spin_trylock(spinlock_T * lock);
+
+
 /*
 
 */
@@ -306,10 +306,10 @@ int color_printk(unsigned int FRcolor,unsigned int BKcolor,const char * fmt,...)
 	int count = 0;
 	int line = 0;
 	va_list args;
-	if(get_rflags() & 0x200UL)
-	{
-		spin_lock(&Pos.printk_lock);
-	}
+
+	unsigned long flags = 0;
+	spin_lock_irqsave(&Pos.printk_lock,flags);
+	
 	// memset(Pos.FB_addr, 0x0, Pos.FB_length);
 	memset(buf, 0x0, 4096);
 	va_start(args, fmt);
@@ -327,6 +327,14 @@ int color_printk(unsigned int FRcolor,unsigned int BKcolor,const char * fmt,...)
 		if((unsigned char)*(buf + count) == '\n')
 		{
 			Pos.YPosition++;
+#if CLEAN_SCREEN
+			// clear screen
+			if(0 != count){
+				for(Pos.XPosition; Pos.XPosition < Pos.XResolution; Pos.XPosition++){
+					putchar(Pos.FB_addr , Pos.XResolution , Pos.XPosition * Pos.XCharSize , Pos.YPosition * Pos.YCharSize , FRcolor , BKcolor , ' ');
+				}
+			}
+#endif
 			Pos.XPosition = 0;
 		}
 		else if((unsigned char)*(buf + count) == '\b')
@@ -368,10 +376,9 @@ Label_tab:
 		}
 
 	}
-	if(get_rflags() & 0x200UL)
-	{
-		spin_unlock(&Pos.printk_lock);
-	}
+	
+	spin_unlock_irqrestore(&Pos.printk_lock,flags);
+
 	return i;
 }
 
