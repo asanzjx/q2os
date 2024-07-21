@@ -122,7 +122,7 @@ immediately established */
 #define SEEK_MAX	3
 // ==============
 
-/*
+
 #define	__NR_putstring	1
 
 #define	__NR_open	2
@@ -131,7 +131,7 @@ immediately established */
 #define	__NR_write	5
 #define	__NR_lseek	6
 
-
+/*
 unsigned long no_system_call(void);
 unsigned long sys_putstring(char *string);
 unsigned long sys_open(char *filename,int flags);

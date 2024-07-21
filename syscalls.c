@@ -3,14 +3,8 @@
 * syscall user app interact
 ***************************************************/
 
-// #include "sys.h"
-#define	__NR_putstring	1
+#include "sys.h"
 
-#define	__NR_open	2
-#define	__NR_close	3
-#define	__NR_read	4
-#define	__NR_write	5
-#define	__NR_lseek	6
 
 #define SYSCALL_COMMON(nr,sym)	extern unsigned long sym(void);
 SYSCALL_COMMON(0,no_system_call)

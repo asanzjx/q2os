@@ -137,10 +137,10 @@ void HPET_init() {
 
 	// 1s
 #if Bochs
-	// *(unsigned long *)(HPET_addr + 0x108) = 14318179;
+	*(unsigned long *)(HPET_addr + 0x108) = 14318179;
 
 	// 20s
-	*(unsigned long *)(HPET_addr + 0x108) = 14318179 * 20;
+	// *(unsigned long *)(HPET_addr + 0x108) = 14318179 * 20;
 #else
 	// intel 400 芯片组时间精度为 41.666667ns
 	*(unsigned long *)(HPET_addr + 0x108) = 23999999;

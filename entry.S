@@ -91,7 +91,8 @@ reschedule:
 
 
 ENTRY(system_call)
-	sti
+	// !!!commit for task schedule
+	// sti
 	subq	$0x38,	%rsp			 
 	cld;					 
 
@@ -118,12 +119,14 @@ ENTRY(system_call)
 	movq	$0x10,	%rdx;			 	
 	movq	%rdx,	%ds;			 	
 	movq	%rdx,	%es;			 
-	movq	%rsp,	%rdi			 	
-			
-	callq	system_call_function		 	////////
+
+	movq	RAX(%rsp),	%rax
+	leaq	system_call_table(%rip),	%rbx
+	callq	*(%rbx,%rax,8)
+	movq	%rax,	RAX(%rsp)
 
 ENTRY(ret_system_call)						
-	movq	%rax,	0x80(%rsp)		 
+	// movq	%rax,	0x80(%rsp)		 
 	popq	%r15				 
 	popq	%r14				 	
 	popq	%r13				 	
@@ -144,6 +147,10 @@ ENTRY(ret_system_call)
 	movq	%rax,	%es			 
 	popq	%rax				 
 	addq	$0x38,	%rsp
+
+	xchgq	%rdx,	%r10
+	xchgq	%rcx,	%r11
+
 	sti	
 	.byte	0x48		 
 	sysexit					 

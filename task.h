@@ -207,7 +207,7 @@ extern unsigned long _stack_start;
 extern void ret_system_call(void);
 extern void system_call(void);
 
-extern system_call_t system_call_table[MAX_SYSTEM_CALL_NR];
+// extern system_call_t system_call_table[MAX_SYSTEM_CALL_NR];
 
 
 extern struct task_struct *init_task[NR_CPUS];
@@ -279,11 +279,9 @@ inline long spin_trylock(spinlock_T * lock)
 
 
 unsigned long do_fork(struct pt_regs * regs, unsigned long clone_flags, unsigned long stack_start, unsigned long stack_size);
+unsigned long do_execve(struct pt_regs * regs);
+unsigned long do_exit(unsigned long code);
 void task_init();
-
-unsigned long no_system_call(struct pt_regs * regs);
-
-unsigned long sys_printf(struct pt_regs * regs);
 
 
 #endif

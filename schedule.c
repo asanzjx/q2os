@@ -61,6 +61,16 @@ void schedule()
 	// cli();
 	current->flags &= ~NEED_SCHEDULE;
 	tsk = get_next_task();
+#if DEBUG
+/*
+	color_printk(RED,BLACK,"[+]%s #cur 0x%p, list prev->0x%p, next->0x%p, pid: %d, vrun_time:%d; \
+		\n\tnext task :0x%p, list prev->0x%p, next->0x%p, pid:%d, vrun_time:%d#\n", \
+		__func__, current, current->list.prev, current->list.next, current->pid, current->vrun_time, \
+		tsk, tsk->list.prev, tsk->list.next, tsk->pid, tsk->vrun_time);
+	if(current == tsk)
+		// __asm__ __volatile__("xchgw %bx, %bx");
+*/
+#endif
 	// color_printk(RED,BLACK,"RFLAGS:%#018lx\n",get_rflags());
 	// color_printk(RED,BLACK,"#schedule:%d#\n",jiffies);
 	

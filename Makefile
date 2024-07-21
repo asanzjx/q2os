@@ -30,7 +30,7 @@ else
 endif
 
 all: system_no_kallsyms kallsyms.o
-	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o kallsyms.o fat32.o VFS.o -T Kernel.lds
+	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o kallsyms.o fat32.o VFS.o sys.o syscalls.o -T Kernel.lds
 	$(OBJCOPY) -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
 	rm -rf kallsyms kallsyms.S *.o *.as
 	$(OBJDUMP) -d ./system > system.bin.asm
@@ -39,10 +39,10 @@ all: system_no_kallsyms kallsyms.o
 
 
 ifeq ($(PIC),APIC)
-# system_no_kallsyms:	head.o entry.o APU_boot.o backtrace.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o sys.o syscalls.o
-# 	$(LD) -b elf64-x86-64 -z muldefs -o system_no_kallsyms head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o sys.o syscalls.o -T Kernel.lds
-system_no_kallsyms:	head.o entry.o APU_boot.o backtrace.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o
-	$(LD) -b elf64-x86-64 -z muldefs -o system_no_kallsyms head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o -T Kernel.lds
+system_no_kallsyms:	head.o entry.o APU_boot.o backtrace.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o sys.o syscalls.o
+	$(LD) -b elf64-x86-64 -z muldefs -o system_no_kallsyms head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o sys.o syscalls.o -T Kernel.lds
+# system_no_kallsyms:	head.o entry.o APU_boot.o backtrace.o printk.o trap.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o
+# 	$(LD) -b elf64-x86-64 -z muldefs -o system_no_kallsyms head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o fat32.o VFS.o -T Kernel.lds
 
 else
 system:	head.o entry.o printk.o trap.o memory.o PIC.o task.o main.o

@@ -7,8 +7,8 @@
 // #define CLEAN_SCREEN	1	// !!!be care for, cased panic without spin_lock irq manage; and too slow !!!
 
 // --- TEST ---
-#define TEST_DISK1_FAT32	1
-// #define TEST_SYSCALL	1
+// #define TEST_DISK1_FAT32	1
+#define TEST_SYSCALL	1
 // ------------
 
 #if Bochs

@@ -3,7 +3,7 @@
 #include "lib.h"
 #include "memory.h"
 #include "SMP.h"
-
+#include "sys.h"
 
 //////////////////////////////////////////////////
 //					Global vars					//
@@ -32,29 +32,6 @@ struct tss_struct init_tss[NR_CPUS] = { [0 ... NR_CPUS-1] = INIT_TSS };
 //////////////////////////////////////////////////
 //					Functions					//
 //////////////////////////////////////////////////
-system_call_t system_call_table[MAX_SYSTEM_CALL_NR] = 
-{
-	[0] = no_system_call,
-	[1] = sys_printf,
-	[2 ... MAX_SYSTEM_CALL_NR-1] = no_system_call
-};
-
-unsigned long no_system_call(struct pt_regs * regs)
-{
-	color_printk(RED,BLACK,"no_system_call is calling,NR:%#04x\n",regs->rax);
-	return -1;
-}
-
-unsigned long sys_printf(struct pt_regs * regs)
-{
-	color_printk(BLACK,WHITE,(char *)regs->rdi);
-
-		// temp disk1 test
-	color_printk(RED,BLACK,"FAT32 init \n");
-	DISK1_FAT32_FS_init();	// FAT32.c
-
-	return 1;
-}
 
 void user_level_function()
 {
@@ -63,16 +40,202 @@ void user_level_function()
 	// color_printk(RED,BLACK,"user_level_function task is running\n");
 	char string[]="\n\tHello World! -from user level function\n";
 
+/*
 	__asm__	__volatile__	(	"leaq	sysexit_return_address(%%rip),	%%rdx	\n\t"
 					"movq	%%rsp,	%%rcx		\n\t"
 					"sysenter			\n\t"
 					"sysexit_return_address:	\n\t"
 					:"=a"(ret):"0"(1),"D"(string):"memory");	
-
+*/
 	// color_printk(RED,BLACK,"user_level_function task called sysenter,ret:%ld\n",ret);
 	// __asm__ __volatile__("xchgw %bx, %bx");
 
-	while(1);
+	int errno = 0;
+	char filepath[] = "/123/B.TXT";
+	unsigned char buf[32] = {0};
+	int fd = 0;
+// /*
+	
+	// sub rsp for stack overflow
+		__asm__ __volatile__	(	"sub $0x100, %%rsp \n\t"
+					"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					"addq $0x100, %%rsp \n\t"
+					:"=a"(errno)
+					:"0"(__NR_putstring),"D"(string)
+					:"memory");
+	
+	__asm__ __volatile__	(	"sub $0x100, %%rsp \n\t"
+					"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address10(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address10:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					"addq $0x100, %%rsp \n\t"
+					:"=a"(errno)
+					:"0"(__NR_putstring),"D"(filepath)
+					:"memory");
+	
+// */
+#if TEST_SYSCALL
+	//	call sys_open
+//	int open(const char *path, int oflag);
+	__asm__ __volatile__	(	"sub $0x100, %%rsp \n\t"
+					"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address0(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address0:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno)
+					:"0"(__NR_open),"D"(filepath),"S"(0)
+					:"memory");
+
+	fd = errno;
+// /*
+//	call sys_read
+//	long read(int fildes, void *buf, long nbyte);
+
+	__asm__ __volatile__	(	"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address1(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address1:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno),"+D"(fd)
+					:"0"(__NR_read),"S"(buf),"d"(10)
+					:"memory");
+					
+//	call sys_putstring
+//	int putstring(char *string);
+
+	__asm__ __volatile__	(	"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address2(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address2:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno)
+					:"0"(__NR_putstring),"D"(buf)
+					:"memory");
+
+//	call sys_write
+//	long write(int fildes, const void *buf, long nbyte);
+
+	__asm__ __volatile__	(	"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address3(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address3:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno),"+D"(fd)
+					:"0"(__NR_write),"S"(string),"d"(20)
+					:"memory");
+
+//	call sys_lseek
+//	long lseek(int fildes, long offset, int whence);
+
+	__asm__ __volatile__	(	"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address4(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address4:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno),"+D"(fd)
+					:"0"(__NR_lseek),"S"(5),"d"(SEEK_SET)
+					:"memory");
+
+//	call sys_read
+//	long read(int fildes, void *buf, long nbyte);
+
+	__asm__ __volatile__	(	"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address5(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address5:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno),"+D"(fd)
+					:"0"(__NR_read),"S"(buf),"d"(20)
+					:"memory");
+// */
+//	call sys_close
+//	int close(int fildes);
+
+	__asm__ __volatile__	(	"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address6(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address6:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno),"+D"(fd)
+					:"0"(__NR_close)
+					:"memory");
+
+//	call sys_putstring
+//	int putstring(char *string);
+
+	__asm__ __volatile__	(	"pushq	%%r10	\n\t"
+					"pushq	%%r11	\n\t"
+					"leaq	sysexit_return_address7(%%rip),	%%r10	\n\t"
+					"movq	%%rsp,	%%r11		\n\t"
+					"sysenter			\n\t"
+					"sysexit_return_address7:	\n\t"
+					"xchgq	%%rdx,	%%r10	\n\t"
+					"xchgq	%%rcx,	%%r11	\n\t"
+					"popq	%%r11	\n\t"
+					"popq	%%r10	\n\t"
+					:"=a"(errno)
+					:"0"(__NR_putstring),"D"(string)
+					:"memory");
+	
+	__asm__ __volatile__("addq $0x100, %rsp");
+	// __asm__ __volatile__("xchgw %bx, %bx");
+// */
+#endif
+
+	while(1)
+		pause();
 }
 
 
@@ -83,8 +246,10 @@ unsigned long do_execve(struct pt_regs * regs)
 	unsigned long * virtual = NULL;
 	struct Page * p = NULL;
 	
-	regs->rdx = 0x800000;	//RIP
-	regs->rcx = 0xa00000;	//RSP
+	// regs->rdx = 0x800000;	//RIP
+	// regs->rcx = 0xa00000;	//RSP
+	regs->r10 = 0x800000;	//RIP
+	regs->r11 = 0xa00000;	//RSP
 	regs->rax = 1;	
 	regs->ds = 0;
 	regs->es = 0;
@@ -120,7 +285,9 @@ unsigned long do_execve(struct pt_regs * regs)
 unsigned long init(unsigned long arg)
 {
 	struct pt_regs *regs;
-
+	// temp disk1 test
+	color_printk(RED,BLACK,"FAT32 init \n");
+	DISK1_FAT32_FS_init();	// FAT32.c
 	color_printk(RED,BLACK,"init task is running,arg:%#018lx\n",arg);
 
 	current->thread->rip = (unsigned long)ret_system_call;
@@ -194,13 +361,8 @@ unsigned long do_exit(unsigned long code)
 }
 
 
-unsigned long  system_call_function(struct pt_regs * regs)
-{
-	return system_call_table[regs->rax](regs);
-}
 
-
-extern void kernel_thread_func(void);
+void kernel_thread_func(void);
 __asm__ (
 "kernel_thread_func:	\n\t"
 "	popq	%r15	\n\t"

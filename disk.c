@@ -275,7 +275,7 @@ hw_int_controller disk_int_controller =
 void disk_handler(unsigned long nr, unsigned long parameter, struct pt_regs * regs)
 {
 	struct block_buffer_node * node = ((struct request_queue *)parameter)->in_using;
-	color_printk(BLACK,WHITE,"disk_handler\n");
+	// color_printk(BLACK,WHITE,"disk_handler,preempt:%d,pid:%d,cRSP:%#018lx,RSP:%#018lx,RIP:%#018lx\n",current->preempt_count,current->pid,get_rsp(),regs->rsp,regs->rip);
 	node->end_handler(nr,parameter);
 }
 
