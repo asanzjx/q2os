@@ -19,6 +19,7 @@ ifeq ($(shell arch),x86_64)
 	as = as
 	LD = ld
 	OBJCOPY = objcopy
+	OBJDUMP := objdump
 	NM = nm
 else
 	GCC = x86_64-elf-gcc
@@ -29,12 +30,13 @@ else
 	NM = x86_64-elf-nm
 endif
 
-all: system_no_kallsyms kallsyms.o
+all: system_no_kallsyms kallsyms.o $(WORKDIR)/user
 	$(LD) -b elf64-x86-64 -z muldefs -o system head.o entry.o APU_boot.o backtrace.o trap.o printk.o memory.o PIC.o interrupt.o task.o keyboard.o mouse.o disk.o SMP.o HPET.o schedule.o main.o kallsyms.o fat32.o VFS.o sys.o syscalls.o -T Kernel.lds
 	$(OBJCOPY) -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
 	rm -rf kallsyms kallsyms.S *.o *.as
 	$(OBJDUMP) -d ./system > system.bin.asm
-# make -C $(WORKDIR)/deploy
+	make -C $(WORKDIR)/user
+	make -C $(WORKDIR)/app
 	cd $(WORKDIR)/deploy && ./deploy_kernel.sh 
 
 
@@ -108,7 +110,7 @@ backtrace.o: backtrace.c
 	$(GCC) $(CFLAGS) -c backtrace.c
 
 kallsyms.o: kallsyms.c system_no_kallsyms
-	gcc -o kallsyms kallsyms.c
+	$(GCC) -o kallsyms kallsyms.c
 	$(NM) -n system_no_kallsyms | ./kallsyms > kallsyms.S
 	$(GCC) -c kallsyms.S
 
@@ -128,7 +130,9 @@ loader:
 	nasm ./loader.asm -o ./loader.bin
 
 clean:
-	rm -rf *.o *.s system* kernel.bin* kallsyms kallsyms.S
+	rm -rf *.o *.s system* kernel.bin* kallsyms kallsyms.S *.as
+	make clean -C $(WORKDIR)/user
+	make clean -C $(WORKDIR)/app
 
 test:
 	@echo $(MAKE_VERSION)

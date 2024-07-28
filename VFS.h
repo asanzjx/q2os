@@ -7,6 +7,14 @@
 #define __VFS_H__
 #include "lib.h"
 
+struct dirent
+{
+	long d_offset;
+	long d_type;
+	long d_namelen;
+	char d_name[];
+};
+
 struct Disk_Partition_Table_Entry
 {
 	unsigned char flags;
@@ -70,6 +78,7 @@ struct index_node
 
 #define FS_ATTR_FILE	(1UL << 0)
 #define FS_ATTR_DIR		(1UL << 1)
+#define	FS_ATTR_DEVICE	(1UL << 2)
 
 struct dir_entry
 {
@@ -123,6 +132,8 @@ struct dir_entry_operations
 	long (*iput)(struct dir_entry * dentry,struct index_node * inode);
 };
 
+typedef int (*filldir_t)(void *buf,char *name, long namelen,long type,long offset);
+
 struct file_operations
 {
 	long (*open)(struct index_node * inode,struct file * filp);
@@ -131,8 +142,12 @@ struct file_operations
 	long (*write)(struct file * filp,char * buf,unsigned long count,long * position);
 	long (*lseek)(struct file * filp,long offset,long origin);
 	long (*ioctl)(struct index_node * inode,struct file * filp,unsigned long cmd,unsigned long arg);
+
+	long (*readdir)(struct file * filp,void * dirent,filldir_t filler);
 };
 
 struct dir_entry * path_walk(char * name,unsigned long flags);
+int fill_dentry(void *buf,char *name, long namelen,long type,long offset);
+extern struct super_block * root_sb;
 
 #endif

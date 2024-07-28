@@ -143,7 +143,7 @@ struct Global_Memory_Descriptor
 	unsigned long	zones_size;
 	unsigned long 	zones_length;
 
-	unsigned long 	start_code , end_code , end_data , end_brk;
+	unsigned long 	start_code , end_code , end_data , end_rodata , start_brk;
 
 	unsigned long	end_of_struct;	
 };
@@ -159,12 +159,12 @@ struct Global_Memory_Descriptor
 //
 #define ZONE_UNMAPED	(1 << 2)
 
-////struct page attribute (alloc_pages flags)
+////struct page attribute
 
-//
+//	mapped=1 or un-mapped=0 
 #define PG_PTable_Maped	(1 << 0)
 
-//
+//	init-code=1 or normal-code/data=0
 #define PG_Kernel_Init	(1 << 1)
 
 //
@@ -182,16 +182,13 @@ struct Global_Memory_Descriptor
 //
 #define PG_Device	(1 << 6)
 
-//
-#define PG_Kernel	(1 << 7)
+//	kernel=1 or user=0
+#define PG_Kernel	(1 << 3)
 
-//
-#define PG_K_Share_To_U	(1 << 8)
-
-//
-#define PG_Slab		(1 << 9)
 //	shared=1 or single-use=0 
 #define PG_Shared	(1 << 4)
+
+
 struct Page
 {
 	struct Zone *	zone_struct;
@@ -352,7 +349,10 @@ struct Slab * kmalloc_create(unsigned long size);
 unsigned long kfree(void * address);
 
 void free_pages(struct Page * page,int number);
+
 void pagetable_init();
+
+unsigned long do_brk(unsigned long addr,unsigned long len);
 unsigned long get_page_attribute(struct Page * page);
 unsigned long set_page_attribute(struct Page * page,unsigned long flags);
 

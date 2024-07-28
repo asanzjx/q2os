@@ -9,32 +9,38 @@
 #include "APIC.h"
 #include "memory.h"
 #include "printk.h"
+#include "semaphore.h"
+#include "VFS.h"
 
 /*
 
 */
 
 struct keyboard_inputbuffer * p_kb = NULL;
-static int shift_l,shift_r,ctrl_l,ctrl_r,alt_l,alt_r;
+
+wait_queue_T keyboard_wait_queue;
+// static int shift_l,shift_r,ctrl_l,ctrl_r,alt_l,alt_r;
 
 void keyboard_handler(unsigned long nr, unsigned long parameter, struct pt_regs * regs)
 {
 	unsigned char x;
 	x = io_in8(0x60);
-	color_printk(WHITE,BLACK,"(K:%02x)",x);
+//	color_printk(WHITE,BLACK,"(K:%02x)",x);
 
 	if(p_kb->p_head == p_kb->buf + KB_BUF_SIZE)
 		p_kb->p_head = p_kb->buf;
 
 	*p_kb->p_head = x;
 	p_kb->count++;
-	p_kb->p_head ++;	
+	p_kb->p_head ++;
+
+	wakeup(&keyboard_wait_queue,TASK_UNINTERRUPTIBLE);		
 }
 
 /*
 
 */
-
+/*
 unsigned char get_scancode()
 {
 	unsigned char ret  = 0;
@@ -52,10 +58,6 @@ unsigned char get_scancode()
 
 	return ret;
 }
-
-/*
-
-*/
 
 void analysis_keycode()
 {
@@ -189,7 +191,7 @@ void analysis_keycode()
 
 	}
 }
-
+*/
 
 hw_int_controller keyboard_int_controller = 
 {
@@ -204,11 +206,110 @@ hw_int_controller keyboard_int_controller =
 
 */
 
+long keyboard_open(struct index_node * inode,struct file * filp)
+{
+	filp->private_data = p_kb;
+
+	p_kb->p_head = p_kb->buf;
+	p_kb->p_tail = p_kb->buf;
+	p_kb->count  = 0;
+	memset(p_kb->buf,0,KB_BUF_SIZE);
+
+	return 1;
+}
+
+long keyboard_close(struct index_node * inode,struct file * filp)
+{
+	filp->private_data = NULL;
+
+	p_kb->p_head = p_kb->buf;
+	p_kb->p_tail = p_kb->buf;
+	p_kb->count  = 0;
+	memset(p_kb->buf,0,KB_BUF_SIZE);
+
+	return 1;
+}
+
+#define	KEY_CMD_RESET_BUFFER	0
+
+long keyboard_ioctl(struct index_node * inode,struct file * filp,unsigned long cmd,unsigned long arg)
+{
+	switch(cmd)
+	{
+
+		case KEY_CMD_RESET_BUFFER:
+			p_kb->p_head = p_kb->buf;
+			p_kb->p_tail = p_kb->buf;
+			p_kb->count  = 0;
+			memset(p_kb->buf,0,KB_BUF_SIZE);
+		break;
+
+		default:
+		break;
+	}
+
+	return 0;
+}
+
+long keyboard_read(struct file * filp,char * buf,unsigned long count,long * position)
+{
+	long counter  = 0;
+	unsigned char * tail = NULL;
+
+#if DEBUG
+	// test if entry user main
+	// color_printk(RED, YELLOW, "\n%s[debug] call keyboard read\n", __func__);
+	// BochsMagicBreakpoint();
+#endif
+
+	if(p_kb->count == 0)
+		sleep_on(&keyboard_wait_queue);
+
+	counter = p_kb->count >= count? count:p_kb->count;
+	tail = p_kb->p_tail;
+	
+	if(counter <= (p_kb->buf + KB_BUF_SIZE - tail))
+	{
+		copy_to_user(tail,buf,counter);
+		p_kb->p_tail += counter;
+	}
+	else
+	{
+		copy_to_user(tail,buf,(p_kb->buf + KB_BUF_SIZE - tail));
+		copy_to_user(p_kb->p_head,buf,counter - (p_kb->buf + KB_BUF_SIZE - tail));
+		p_kb->p_tail = p_kb->p_head + (counter - (p_kb->buf + KB_BUF_SIZE - tail));
+	}
+	p_kb->count -= counter;
+
+	return counter;	
+}
+
+long keyboard_write(struct file * filp,char * buf,unsigned long count,long * position)
+{
+	return 0;
+}
+
+
+struct file_operations keyboard_fops = 
+{
+	.open = keyboard_open,
+	.close = keyboard_close,
+	.ioctl = keyboard_ioctl,
+	.read = keyboard_read,
+	.write = keyboard_write,
+};
+
+/*
+
+*/
+
 
 void keyboard_init()
 {
 	struct IO_APIC_RET_entry entry;
 	unsigned long i,j;
+
+	wait_queue_init(&keyboard_wait_queue,NULL);
 
 	p_kb = (struct keyboard_inputbuffer *)kmalloc(sizeof(struct keyboard_inputbuffer),0);
 	
@@ -239,14 +340,15 @@ void keyboard_init()
 	for(i = 0;i<1000;i++)
 		for(j = 0;j<1000;j++)
 			nop();
-	
+
+/*	
 	shift_l = 0;
 	shift_r = 0;
 	ctrl_l  = 0;
 	ctrl_r  = 0;
 	alt_l   = 0;
 	alt_r   = 0;
-
+*/
 	register_irq(0x21, &entry , &keyboard_handler, (unsigned long)p_kb, &keyboard_int_controller, "ps/2 keyboard");
 }
 

@@ -1,4 +1,7 @@
 #include "memory.h"
+#include "task.h"
+#include "sys.h"
+
 
 
 unsigned long page_init(struct Page * page,unsigned long flags)
@@ -57,7 +60,8 @@ void init_memory()
 {
 	int i,j;
 	unsigned long TotalMem = 0 ;
-	struct E820 *p = NULL;	
+	struct E820 *p = NULL;
+	unsigned long * tmp = NULL;	
 	
 	color_printk(BLUE,BLACK,"Display Physics Address MAP,Type(1:RAM,2:ROM or Reserved,3:ACPI Reclaim Memory,4:ACPI NVS Memory,Others:Undefine)\n");
 	p = (struct E820 *)0xffff800000007e00;
@@ -66,7 +70,6 @@ void init_memory()
 	{
 		if(p->type == 1)
 		color_printk(ORANGE,BLACK,"Address:%#018lx\tLength:%#018lx\tType:%#010x\n",p->address,p->length,p->type);
-		unsigned long tmp = 0;
 		if(p->type == 1)
 			TotalMem +=  p->length;
 
@@ -105,7 +108,7 @@ void init_memory()
 
 	//bits map construction init
 
-	memory_management_struct.bits_map = (unsigned long *)((memory_management_struct.end_brk + PAGE_4K_SIZE - 1) & PAGE_4K_MASK);
+	memory_management_struct.bits_map = (unsigned long *)((memory_management_struct.start_brk + PAGE_4K_SIZE - 1) & PAGE_4K_MASK);
 
 	memory_management_struct.bits_size = TotalMem >> PAGE_2M_SHIFT;
 
@@ -138,7 +141,6 @@ void init_memory()
 		unsigned long start,end;
 		struct Zone * z;
 		struct Page * p;
-		unsigned long * b;
 
 		if(memory_management_struct.e820[i].type != 1)
 			continue;
@@ -220,7 +222,7 @@ void init_memory()
 	
 	memory_management_struct.end_of_struct = (unsigned long)((unsigned long)memory_management_struct.zones_struct + memory_management_struct.zones_length + sizeof(long) * 32) & ( ~ (sizeof(long) - 1));	////need a blank to separate memory_management_struct
 
-	color_printk(ORANGE,BLACK,"start_code:%#018lx,end_code:%#018lx,end_data:%#018lx,end_brk:%#018lx,end_of_struct:%#018lx\n",memory_management_struct.start_code,memory_management_struct.end_code,memory_management_struct.end_data,memory_management_struct.end_brk, memory_management_struct.end_of_struct);
+	color_printk(ORANGE,BLACK,"start_code:%#018lx,end_code:%#018lx,end_data:%#018lx,start_brk:%#018lx,end_of_struct:%#018lx\n",memory_management_struct.start_code,memory_management_struct.end_code,memory_management_struct.end_data,memory_management_struct.start_brk, memory_management_struct.end_of_struct);
 	
 	i = Virt_To_Phy(memory_management_struct.end_of_struct) >> PAGE_2M_SHIFT;
 
@@ -233,11 +235,11 @@ void init_memory()
 		tmp_page->zone_struct->page_free_count--;
 	}
 
-	Global_CR3 = Get_gdt();
+	tmp = Get_gdt();
 
-	color_printk(INDIGO,BLACK,"Global_CR3\t:%#018lx\n",Global_CR3);
-	color_printk(INDIGO,BLACK,"*Global_CR3\t:%#018lx\n",*Phy_To_Virt(Global_CR3) & (~0xff));
-	color_printk(PURPLE,BLACK,"**Global_CR3\t:%#018lx\n",*Phy_To_Virt(*Phy_To_Virt(Global_CR3) & (~0xff)) & (~0xff));
+	color_printk(INDIGO,BLACK,"tmp\t:%#018lx\n",tmp);
+	color_printk(INDIGO,BLACK,"*tmp\t:%#018lx\n",*Phy_To_Virt(tmp) & (~0xff));
+	color_printk(PURPLE,BLACK,"**tmp\t:%#018lx\n",*Phy_To_Virt(*Phy_To_Virt(tmp) & (~0xff)) & (~0xff));
 
 	color_printk(ORANGE,BLACK,"1.memory_management_struct.bits_map:%#018lx\tzone_struct->page_using_count:%d\tzone_struct->page_free_count:%d\n",*memory_management_struct.bits_map,memory_management_struct.zones_struct->page_using_count,memory_management_struct.zones_struct->page_free_count);
 
@@ -1011,7 +1013,8 @@ unsigned long slab_init()
 
 	color_printk(ORANGE,BLACK,"3.memory_management_struct.bits_map:%#018lx\tzone_struct->page_using_count:%d\tzone_struct->page_free_count:%d\n",*memory_management_struct.bits_map,memory_management_struct.zones_struct->page_using_count,memory_management_struct.zones_struct->page_free_count);
 
-	color_printk(ORANGE,BLACK,"start_code:%#018lx,end_code:%#018lx,end_data:%#018lx,end_brk:%#018lx,end_of_struct:%#018lx\n",memory_management_struct.start_code,memory_management_struct.end_code,memory_management_struct.end_data,memory_management_struct.end_brk, memory_management_struct.end_of_struct);
+	// color_printk(ORANGE,BLACK,"start_code:%#018lx,end_code:%#018lx,end_data:%#018lx,end_brk:%#018lx,end_of_struct:%#018lx\n",memory_management_struct.start_code,memory_management_struct.end_code,memory_management_struct.end_data,memory_management_struct.end_brk, memory_management_struct.end_of_struct);
+	color_printk(ORANGE,BLACK,"start_code:%#018lx,end_code:%#018lx,end_data:%#018lx,start_brk:%#018lx,end_of_struct:%#018lx\n",memory_management_struct.start_code,memory_management_struct.end_code,memory_management_struct.end_data,memory_management_struct.start_brk, memory_management_struct.end_of_struct);
 
 	return 1;
 }
@@ -1025,9 +1028,10 @@ void pagetable_init()
 	unsigned long i,j;
 	unsigned long * tmp = NULL;
 
-	Global_CR3 = Get_gdt();
+	// Global_CR3 = Get_gdt();
 	// 此段代码使用Get_gdt函数来取得CR3控制寄存器保存的顶层页表的物理基地址。由于CR3控制寄存器中含有标志位，故此，这里要使用代码(unsigned long)Global_CR3 & (~ 0xfffUL)将标志位屏蔽，所得结果即是顶层页表的物理基地址
-	tmp = (unsigned long *)(((unsigned long)Phy_To_Virt((unsigned long)Global_CR3 & (~ 0xfffUL))) + 8 * 256);
+	// tmp = (unsigned long *)(((unsigned long)Phy_To_Virt((unsigned long)Global_CR3 & (~ 0xfffUL))) + 8 * 256);
+	tmp = (unsigned long *)(((unsigned long)Phy_To_Virt((unsigned long)Get_gdt() & (~ 0xfffUL))) + 8 * 256);
 		
 	// color_printk(YELLOW,BLACK,"1:%#018lx,%#018lx\t\t\n",(unsigned long)tmp,*tmp);
 
@@ -1050,11 +1054,13 @@ void pagetable_init()
 		for(j = 0;j < z->pages_length ; j++,p++)
 		{
 			
-			tmp = (unsigned long *)(((unsigned long)Phy_To_Virt((unsigned long)Global_CR3 & (~ 0xfffUL))) + (((unsigned long)Phy_To_Virt(p->PHY_address) >> PAGE_GDT_SHIFT) & 0x1ff) * 8);
+			// tmp = (unsigned long *)(((unsigned long)Phy_To_Virt((unsigned long)Global_CR3 & (~ 0xfffUL))) + (((unsigned long)Phy_To_Virt(p->PHY_address) >> PAGE_GDT_SHIFT) & 0x1ff) * 8);
+			tmp = (unsigned long *)(((unsigned long)Phy_To_Virt((unsigned long)Get_gdt() & (~ 0xfffUL))) + (((unsigned long)Phy_To_Virt(p->PHY_address) >> PAGE_GDT_SHIFT) & 0x1ff) * 8);
 			
 			if(*tmp == 0)
 			{			
 				unsigned long * virtual = kmalloc(PAGE_4K_SIZE,0);
+				memset(virtual,0,PAGE_4K_SIZE);
 				set_mpl4t(tmp,mk_mpl4t(Virt_To_Phy(virtual),PAGE_KERNEL_GDT));
 			}
 
@@ -1063,6 +1069,7 @@ void pagetable_init()
 			if(*tmp == 0)
 			{
 				unsigned long * virtual = kmalloc(PAGE_4K_SIZE,0);
+				memset(virtual,0,PAGE_4K_SIZE);
 				set_pdpt(tmp,mk_pdpt(Virt_To_Phy(virtual),PAGE_KERNEL_Dir));
 			}
 
@@ -1077,3 +1084,47 @@ void pagetable_init()
 
 	flush_tlb();
 }
+
+unsigned long do_brk(unsigned long addr,unsigned long len)
+{
+	unsigned long * tmp = NULL;
+	unsigned long * virtual = NULL;
+	struct Page * p = NULL;
+	unsigned long i = 0;
+
+	for(i = addr;i < addr + len;i += PAGE_2M_SIZE)
+	{
+		tmp = Phy_To_Virt((unsigned long *)((unsigned long)current->mm->pgd & (~ 0xfffUL)) + ((i >> PAGE_GDT_SHIFT) & 0x1ff));
+		if(*tmp == NULL)
+		{
+			virtual = kmalloc(PAGE_4K_SIZE,0);
+			memset(virtual,0,PAGE_4K_SIZE);
+			set_mpl4t(tmp,mk_mpl4t(Virt_To_Phy(virtual),PAGE_USER_GDT));
+		}
+
+		tmp = Phy_To_Virt((unsigned long *)(*tmp & (~ 0xfffUL)) + ((i >> PAGE_1G_SHIFT) & 0x1ff));
+		if(*tmp == NULL)
+		{
+			virtual = kmalloc(PAGE_4K_SIZE,0);
+			memset(virtual,0,PAGE_4K_SIZE);
+			set_pdpt(tmp,mk_pdpt(Virt_To_Phy(virtual),PAGE_USER_Dir));
+		}
+
+		tmp = Phy_To_Virt((unsigned long *)(*tmp & (~ 0xfffUL)) + ((i >> PAGE_2M_SHIFT) & 0x1ff));
+		if(*tmp == NULL)
+		{
+			p = alloc_pages(ZONE_NORMAL,1,PG_PTable_Maped);
+			if(p == NULL)
+				return -ENOMEM;
+			set_pdt(tmp,mk_pdt(p->PHY_address,PAGE_USER_Page));
+		}
+	}
+
+	current->mm->end_brk = i;
+
+	flush_tlb();
+
+	return i;
+}
+
+

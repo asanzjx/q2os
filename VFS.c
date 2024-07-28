@@ -6,7 +6,7 @@
 #include "VFS.h"
 #include "printk.h"
 #include "memory.h"
-
+#include "sys.h"
 //function mount_root
 struct super_block * root_sb = NULL;
 struct file_system_type filesystem = {"q2osfilesystem",0};
@@ -77,6 +77,20 @@ last_component:
 	}
 
 	return path;
+}
+
+int fill_dentry(void *buf,char *name, long namelen,long type,long offset)
+{
+	struct dirent* dent = (struct dirent*)buf;
+	
+	if((unsigned long)buf < TASK_SIZE && !verify_area(buf,sizeof(struct dirent) + namelen))
+		return -EFAULT;
+	
+	memcpy(name,dent->d_name,namelen);
+	dent->d_namelen = namelen;
+	dent->d_type = type;
+	dent->d_offset = offset;
+	return sizeof(struct dirent) + namelen;
 }
 
 struct super_block* mount_fs(char * name,struct Disk_Partition_Table_Entry * DPTE,void * buf)

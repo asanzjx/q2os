@@ -46,9 +46,5 @@ implement based on Single CPU
 - support multi cpus task schedule based on CFS schedult strategy， IPI and HPET timer(softirq)
 - trap exception with regs display and kernel backtrace
 - file system, based on FAT32 and VFS
-
-// todo..
-```
-[] POSIX system call
-[] shell env
-```
+- POSIX system call
+- shell env and shell command, create KEYBOARD.DEV file for r3 user get keyboard input info

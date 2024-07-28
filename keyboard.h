@@ -209,6 +209,6 @@ void keyboard_exit();
 
 */
 
-void analysis_keycode();
+// void analysis_keycode();
 
 #endif

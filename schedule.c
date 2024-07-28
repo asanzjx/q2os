@@ -92,6 +92,7 @@ void schedule()
 					break;
 			}
 		
+		switch_mm(current,tsk);
 		switch_to(current,tsk);	
 	}
 	else

@@ -41,9 +41,8 @@
 //////////////////////////////////////////////////
 //					Global vars					//
 //////////////////////////////////////////////////
-/*************
-    static var 
-*/
+long global_pid = 0;
+
 // record screen info
 struct position Pos = {0};
 
@@ -413,7 +412,8 @@ void Start_Kernel(void)
     memory_management_struct.start_code = (unsigned long)& _text;
 	memory_management_struct.end_code   = (unsigned long)& _etext;
 	memory_management_struct.end_data   = (unsigned long)& _edata;
-	memory_management_struct.end_brk    = (unsigned long)& _end;
+	memory_management_struct.end_rodata = (unsigned long)& _erodata;
+	memory_management_struct.start_brk  = (unsigned long)& _end;
 
     color_printk(RED,BLACK,"[+] memory init \n");
 	init_memory();
@@ -502,15 +502,16 @@ void Start_Kernel(void)
 	// color_printk(BLACK, WHITE, "year:%#010x,month:%#010x,day:%#010x,hour:%#010x,mintue:%#010x,second:%#010x\n",time.year,time.month,time.day,time.hour,time.minute, time.second);
 	color_printk(RED, YELLOW, "\n%s ===========[+]Get COMS time...HPET init...........\n", __func__);
 	HPET_init();
-	sti();
+	
     // 5. multi task
     color_printk(RED,BLACK,"[+] task_init \n");
 	task_init();
+	sti();
 
 	while(1){
 #if APIC
-		if(p_kb->count)
-			analysis_keycode();
+		// if(p_kb->count)
+		// 	analysis_keycode();
 		if(p_mouse->count)
 			analysis_mousecode();
 #endif

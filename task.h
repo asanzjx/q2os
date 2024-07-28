@@ -6,6 +6,18 @@
 #include "lib.h"
 #include "gate.h"
 
+struct mm_struct
+{
+	pml4t_t *pgd;	//page table point
+	
+	unsigned long start_code,end_code;
+	unsigned long start_data,end_data;
+	unsigned long start_rodata,end_rodata;
+	unsigned long start_bss,end_bss;
+	unsigned long start_brk,end_brk;
+	unsigned long start_stack;
+};
+
 struct thread_struct
 {
 	unsigned long rsp0;	//in tss
@@ -21,16 +33,12 @@ struct thread_struct
 	unsigned long error_code;
 };
 
-struct mm_struct
+
+typedef struct
 {
-	pml4t_t *pgd;	//page table point
-	
-	unsigned long start_code,end_code;
-	unsigned long start_data,end_data;
-	unsigned long start_rodata,end_rodata;
-	unsigned long start_brk,end_brk;
-	unsigned long start_stack;	
-};
+	struct List wait_list;
+	struct task_struct *tsk;
+} wait_queue_T;
 
 
 struct task_struct
@@ -51,6 +59,11 @@ struct task_struct
 	long pid;
 	long priority;
 	long vrun_time;
+	struct file * file_struct[TASK_FILE_MAX];
+	long exit_code;
+	wait_queue_T wait_childexit;
+	struct task_struct *next;
+	struct task_struct *parent;
 };
 
 struct tss_struct
@@ -83,9 +96,9 @@ typedef unsigned long (* system_call_t)(struct pt_regs * regs);
 #define	USER_CS		(0x28)
 #define USER_DS		(0x30)
 
-#define CLONE_FS	(1 << 0)
-#define CLONE_FILES	(1 << 1)
-#define CLONE_SIGNAL	(1 << 2)
+// #define CLONE_FS	(1 << 0)
+// #define CLONE_FILES	(1 << 1)
+// #define CLONE_SIGNAL	(1 << 2)
 
 // stack size 32K
 #define STACK_SIZE 32768
@@ -101,6 +114,7 @@ typedef unsigned long (* system_call_t)(struct pt_regs * regs);
 
 #define PF_KTHREAD	(1UL << 0)
 #define NEED_SCHEDULE	(1UL << 1)
+#define PF_VFORK	(1UL << 2)
 
 #define MAX_SYSTEM_CALL_NR 128
 
@@ -116,7 +130,11 @@ typedef unsigned long (* system_call_t)(struct pt_regs * regs);
 	.addr_limit = 0xffffffffffffffff,	\
 	.pid = 0,			\
 	.priority = 2,		\
-	.vrun_time = 0		\
+	.vrun_time = 0,		\
+	.file_struct = {0},	\
+	.exit_code = 0,		\
+	.next = &tsk,		\
+	.parent = &tsk,		\
 }
 
 /*
@@ -204,6 +222,8 @@ extern char _end;
 
 extern unsigned long _stack_start;
 
+extern long global_pid;
+
 extern void ret_system_call(void);
 extern void system_call(void);
 
@@ -278,10 +298,17 @@ inline long spin_trylock(spinlock_T * lock)
 }
 
 
+// ========== implemet in task.c
+long get_pid();
+struct task_struct *get_task(long pid);
+void exit_files(struct task_struct *tsk);
+
 unsigned long do_fork(struct pt_regs * regs, unsigned long clone_flags, unsigned long stack_start, unsigned long stack_size);
-unsigned long do_execve(struct pt_regs * regs);
-unsigned long do_exit(unsigned long code);
+unsigned long do_execve(struct pt_regs *regs,char *name,char *argv[],char *envp[]);
+unsigned long do_exit(unsigned long exit_code);
+
 void task_init();
 
+inline void switch_mm(struct task_struct *prev,struct task_struct *next);
 
 #endif
